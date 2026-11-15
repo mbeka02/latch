@@ -11,6 +11,7 @@ import { LatchProvider, useLatch } from '@/services/latch-context';
 import type { SessionOptions } from '@/services/latch';
 import { AccessScreen } from '@/components/access-screen';
 import { ThemedText } from '@/components/themed-text';
+import { LaunchScreen } from '@/components/launch-screen';
 
 initializeMonitoring();
 
@@ -21,8 +22,10 @@ function RootLayout({ provider, storage, attemptStorage, now }: RootLayoutProps 
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <LatchProvider provider={provider} storage={storage} attemptStorage={attemptStorage} now={now}>
-          <SessionStack />
-          <Notifications />
+          <LaunchScreen>
+            <SessionStack />
+            <Notifications />
+          </LaunchScreen>
         </LatchProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

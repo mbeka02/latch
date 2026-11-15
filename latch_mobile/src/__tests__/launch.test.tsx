@@ -12,6 +12,27 @@ import { createMockOpenpath } from '@/services/mocks/openpath';
 import { createLatch } from '@/services/latch';
 import { createOpenpath, type OpenpathRequest } from '@/services/openpath';
 import * as Sentry from '@sentry/react-native';
+import * as Reanimated from 'react-native-reanimated';
+
+beforeEach(() => {
+  jest.spyOn(Reanimated, 'useReducedMotion').mockReturnValue(true);
+});
+
+test('cold launch shows the Latch branding, reveals sign-in, and does not replay on foreground', async () => {
+  jest.mocked(Reanimated.useReducedMotion).mockReturnValue(false);
+  let onChange: ((state: AppStateStatus) => void) | undefined;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((event, listener) => {
+    if (event === 'change') onChange = listener;
+    return { remove() {} };
+  });
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  expect(screen.getByLabelText('Latch is starting')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeOnTheScreen();
+  expect(await screen.findByRole('button', { name: 'Sign in' }, { timeout: 2000 })).toBeOnTheScreen();
+  expect(screen.queryByLabelText('Latch is starting')).not.toBeOnTheScreen();
+  await act(async () => { onChange?.('background'); onChange?.('active'); });
+  expect(screen.queryByLabelText('Latch is starting')).not.toBeOnTheScreen();
+});
 
 afterEach(async () => {
   await act(async () => { toast.dismiss(); });

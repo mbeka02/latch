@@ -2,6 +2,16 @@
 
 Android-first Expo / React Native app for the IFSS assessment. **Phase 5 implements the direct Openpath adapter and isolated Android transport.** Default demo mode makes no Alta requests and operates no physical door. Live APK/device and IFSS tenant verification remain phase 6 work; no backend is required.
 
+## App branding and launch
+
+The Latch icon uses a rounded white **L**, red diagonal capsules/dots and an orange accent inspired by the IFSS logo. The editable artwork and palette live in `src/constants/branding.ts`; generated PNG/SVG assets live in `assets/branding/`. The opaque launcher icon is 1024 × 1024; Android has separate transparent foreground and monochrome layers with padding for adaptive masks. The starter blue splash and Expo icon overrides have been replaced in app configuration.
+
+Launch uses a static native mark on `#111111`, handed over on layout to the same vector at the same 200 dp size. A 240 ms wordmark reveal and brief fade finish within 700 ms; Reanimated CSS animations run on the UI runtime. It plays once per root mount, never on sign-in or foregrounding. Reduced motion skips the animated overlay. Session restoration runs concurrently; the animation never waits for an API response, and the existing restoration/recovery screen remains responsible for access readiness.
+
+Regenerate assets with `node scripts/generate-brand-assets.mjs` using Node 24+, `/usr/bin/python3`, PyGObject, librsvg and Cairo. These are artwork tools only; no app dependency was added. Do not edit generated PNGs separately from the vector source.
+
+The launcher icon, app label and native splash require a new APK. Expo Go cannot verify their packaged appearance. Router tests cover startup dismissal, reduced-motion journeys and foregrounding; the native-to-React handoff, Android launcher masks and animation smoothness still need a preview/release APK check on a phone. See [Expo's splash guidance](https://docs.expo.dev/versions/v58.0.0/sdk/splash-screen/).
+
 ## Try the demo
 
 Install the locked dependencies with `npm ci`, then run `npm start` and open the project in a compatible Expo Go installation or Android emulator.
