@@ -13,7 +13,8 @@ export function createMockOpenpath(fixtures: { entries?: Entry[]; credentials?: 
   const credentials = fixtures.credentials ?? [{ id: 404, kind: 'cloud-key' as const, validFrom: null, validUntil: null }];
   const unlocks: UnlockRecord[] = [];
   const supportedEmails = ['demo@latch.example', 'mfa@latch.example', 'multi@latch.example', 'no-key@latch.example',
-    'missing@latch.example', 'ambiguous@latch.example', 'denied@latch.example'];
+    'missing@latch.example', 'ambiguous@latch.example', 'denied@latch.example', 'uncertain@latch.example',
+    'unlock-denied@latch.example', 'timeout@latch.example'];
   function sessionFor(email: string): ProviderSession {
     return {
       token: `simulated-session:${email}`,
@@ -89,6 +90,7 @@ export function createMockOpenpath(fixtures: { entries?: Entry[]; credentials?: 
     },
     async unlockEntry({ context, entryId, credentialId }) {
       checkContext(context);
+      if (context.token === 'simulated-session:unlock-denied@latch.example') throw new AccessError('access-denied');
       if (context.token === 'simulated-session:denied@latch.example') throw new AccessError('access-denied');
       if (!entriesFor(context).some((entry) => entry.id === entryId) ||
           !credentialsFor(context).some((credential) => credential.id === credentialId && credential.kind === 'cloud-key')) {
@@ -100,6 +102,8 @@ export function createMockOpenpath(fixtures: { entries?: Entry[]; credentials?: 
         entryId,
         credentialId,
       });
+      if (context.token === 'simulated-session:uncertain@latch.example') throw new Error('Simulated lost response.');
+      if (context.token === 'simulated-session:timeout@latch.example') await new Promise<void>(() => {});
     },
     getUnlockRequests() {
       return unlocks.map((unlock) => ({ ...unlock }));
