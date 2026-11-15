@@ -9,13 +9,16 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useLatch } from '@/services/latch-context';
+import { AccessError, safeAccessError } from '@/lib/access-error';
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const { signIn } = useLatch();
+  const { signIn, signOut, authState, retrySession } = useLatch();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [totpCode, setTotpCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const inputStyle = {
@@ -33,14 +36,23 @@ export default function HomeScreen() {
     if (busy) return;
     setBusy(true);
     setError('');
-    const input = { email, password };
+    const input = { email: email.trim(), password, ...(mfaRequired ? { totpCode } : {}) };
     setPassword('');
+    setTotpCode('');
     setPasswordVisible(false);
     try {
       await signIn(input);
-    } catch {
-      setError('Sign-in failed. Use the demo account shown above.');
-      toast.error('Unable to sign in', { description: 'Check the demo credentials and try again.' });
+    } catch (error) {
+      const failure = safeAccessError(error);
+      if (failure.code === 'stale-operation') return;
+      setError(failure.code === 'invalid-credentials' ? 'Sign-in failed. Use the demo account shown above.' : failure.message);
+      if (failure.code === 'mfa-required' || failure.code === 'mfa-invalid') {
+        setMfaRequired(true);
+        if (failure.code === 'mfa-required') toast.info('Authenticator code required');
+        else toast.error('Code not accepted');
+      } else {
+        toast.error('Unable to sign in');
+      }
     } finally {
       setBusy(false);
     }
@@ -50,13 +62,14 @@ export default function HomeScreen() {
     <AccessScreen>
       <ThemedText>Use a demo account. No physical door will be operated.</ThemedText>
       <ThemedText selectable themeColor="textSecondary">
-        Email: demo@latch.example{'\n'}Password: latch-demo-only
+        Email: demo@latch.example{'\n'}Password: latch-demo-only{'\n'}
+        MFA demo: mfa@latch.example · Code: 123456
       </ThemedText>
       <ThemedText>Email</ThemedText>
       <TextInput
         accessibilityLabel="Email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(value) => { setEmail(value); setMfaRequired(false); setTotpCode(''); setError(''); }}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
@@ -109,12 +122,34 @@ export default function HomeScreen() {
           />
         </Pressable>
       </View>
+      {mfaRequired ? (
+        <>
+          <ThemedText>Authenticator code</ThemedText>
+          <TextInput
+            accessibilityLabel="Authenticator code"
+            value={totpCode}
+            onChangeText={(value) => setTotpCode(value.replace(/\D/g, '').slice(0, 6))}
+            keyboardType="number-pad"
+            autoComplete="one-time-code"
+            maxLength={6}
+            editable={!busy}
+            style={inputStyle}
+          />
+        </>
+      ) : null}
       {error ? <ThemedText accessibilityRole="alert">{error}</ThemedText> : null}
+      {!error && authState.error ? <ThemedText accessibilityRole="alert">{new AccessError(authState.error).message}</ThemedText> : null}
+      {['storage', 'unavailable'].includes(authState.error ?? '') ? <ActionButton label="Retry session check" secondary disabled={busy} onPress={retrySession} /> : null}
       <ActionButton
         label={busy ? 'Signing in…' : 'Sign in'}
-        disabled={busy || !email.trim() || !password}
+        disabled={busy || !email.trim() || !password || (mfaRequired && totpCode.length !== 6)}
         onPress={() => void submit()}
       />
+      {mfaRequired ? <ActionButton label="Cancel sign-in" secondary onPress={() => {
+        toast.dismiss();
+        signOut();
+        setPassword(''); setTotpCode(''); setPasswordVisible(false); setMfaRequired(false); setError('');
+      }} /> : null}
     </AccessScreen>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { toast } from 'sonner-native';
 
@@ -7,6 +7,7 @@ import { ActionButton } from '@/components/action-button';
 import { ThemedText } from '@/components/themed-text';
 import type { DoorChoice } from '@/services/latch';
 import { useLatch } from '@/services/latch-context';
+import { safeAccessError } from '@/lib/access-error';
 
 type DoorState =
   | { status: 'loading' }
@@ -19,8 +20,10 @@ export default function DoorScreen() {
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState('');
+  const mounted = useRef(true);
 
   useEffect(() => {
+    mounted.current = true;
     let active = true;
     function unavailable() {
       if (!active) return;
@@ -35,7 +38,7 @@ export default function DoorScreen() {
       },
       unavailable,
     );
-    return () => { active = false; };
+    return () => { active = false; mounted.current = false; };
   }, [app]);
 
   async function requestUnlock(choiceKey: string) {
@@ -43,17 +46,19 @@ export default function DoorScreen() {
     setOutcome('');
     try {
       const result = await app.doors.requestUnlock(choiceKey);
+      if (!mounted.current) return;
       setOutcome(result.simulated
         ? 'Simulated unlock accepted. No physical door was operated.'
         : 'Unlock request accepted. Door position has not been confirmed.');
       toast.success(result.simulated ? 'Simulated unlock accepted' : 'Unlock request accepted', {
         description: result.simulated ? 'No physical door was operated.' : 'Door position has not been confirmed.',
       });
-    } catch {
+    } catch (error) {
+      if (!mounted.current || ['stale-operation', 'expired'].includes(safeAccessError(error).code)) return;
       setOutcome("We couldn't confirm the result. Check before trying again.");
       toast.warning('Unlock result unconfirmed', { description: 'Check the door before trying again.' });
     } finally {
-      setPending(false);
+      if (mounted.current) setPending(false);
     }
   }
 

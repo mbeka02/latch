@@ -1,11 +1,14 @@
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Alert } from 'react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { toast } from 'sonner-native';
+import * as SecureStore from 'expo-secure-store';
+import type { ProviderSession } from '@/lib/openpath';
 
 import RootLayout from '@/app/_layout';
 import HomeScreen from '@/app/index';
 import DoorScreen from '@/app/door';
 import { createMockOpenpath } from '@/services/mocks/openpath';
+import { createLatch } from '@/services/latch';
 
 afterEach(async () => {
   await act(async () => { toast.dismiss(); });
@@ -161,4 +164,158 @@ test('unavailable door access shows an error toast while unlock remains unavaila
   expect(screen.getByRole('alert')).toHaveTextContent('COE Door access is unavailable.');
   expect(screen.queryByRole('button', { name: /unlock/i })).not.toBeOnTheScreen();
   expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('the employee can complete demo MFA after correcting an invalid authenticator code', async () => {
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'mfa@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+
+  expect(await screen.findByLabelText('Authenticator code')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.changeText(screen.getByLabelText('Authenticator code'), '000000');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByText('That authenticator code was not accepted. Enter your password and a new code.')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Authenticator code')).toHaveDisplayValue('');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.changeText(screen.getByLabelText('Authenticator code'), '123456');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+  expect(screen.getByText('mfa@latch.example')).toBeOnTheScreen();
+});
+
+test('returning to an expired session replaces the door screen with sign-in guidance', async () => {
+  let time = 1_800_000;
+  let onChange: ((status: AppStateStatus) => void) | undefined;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((event, listener) => {
+    if (event === 'change') onChange = listener;
+    return { remove() {} };
+  });
+  const Layout = () => <RootLayout now={() => time} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+
+  time = 2_700_000;
+  await act(async () => { onChange?.('active'); });
+
+  await waitFor(() => expect(screen).toHavePathname('/'));
+  expect(screen.getByRole('alert')).toHaveTextContent('Your session has expired. Sign in again.');
+  expect(screen.queryByRole('button', { name: /Unlock COE Door/ })).not.toBeOnTheScreen();
+});
+
+test('cancelling MFA clears the entered secrets and its obsolete notification', async () => {
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'mfa@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.changeText(await screen.findByLabelText('Authenticator code'), '123456');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel sign-in' }));
+
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('');
+  expect(screen.queryByLabelText('Authenticator code')).not.toBeOnTheScreen();
+  expect(screen.queryByText('Authenticator code required')).not.toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: /Unlock COE Door/ })).not.toBeOnTheScreen();
+});
+
+test('a restart waits for a current provider check before restoring secure native session data', async () => {
+  const nativeValues = new Map<string, string>();
+  jest.spyOn(SecureStore, 'getItemAsync').mockImplementation(async (key) => nativeValues.get(key) ?? null);
+  jest.spyOn(SecureStore, 'setItemAsync').mockImplementation(async (key, value) => { nativeValues.set(key, value); });
+  jest.spyOn(SecureStore, 'deleteItemAsync').mockImplementation(async (key) => { nativeValues.delete(key); });
+  const base = createMockOpenpath();
+  let finishCheck!: (session: ProviderSession) => void;
+  const check = new Promise<ProviderSession>((resolve) => { finishCheck = resolve; });
+  const provider = { ...base, async checkSession() { return check; } };
+  const Layout = () => <RootLayout provider={provider} />;
+  const first = await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'mfa@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.changeText(await screen.findByLabelText('Authenticator code'), '123456');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+  const stored = nativeValues.get('latch.demo.session.v1');
+  expect(stored).toBeDefined();
+  expect(stored).not.toContain('latch-demo-only');
+  expect(stored).not.toContain('123456');
+  await first.unmount();
+
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  expect(screen.getByText('Checking secure session…')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: /Unlock COE Door/ })).not.toBeOnTheScreen();
+  await act(async () => { finishCheck(await base.checkSession('simulated-session:mfa@latch.example')); });
+
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+  expect(screen.getByText('mfa@latch.example')).toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toEqual([]);
+});
+
+test('a startup service outage offers explicit recovery without granting cached door access', async () => {
+  const base = createMockOpenpath();
+  let saved: string | null = null;
+  const storage = {
+    async read() { return saved; },
+    async write(value: string) { saved = value; },
+    async clear() { saved = null; },
+  };
+  await createLatch(base, { storage }).auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  let offline = true;
+  const provider = { ...base, async checkSession(token: string) {
+    if (offline) throw new Error('Private provider response');
+    return base.checkSession(token);
+  } };
+  const Layout = () => <RootLayout provider={provider} storage={storage} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The service is unavailable. Try again when your connection is restored.');
+  expect(screen.queryByRole('button', { name: 'Unlock COE Door' })).not.toBeOnTheScreen();
+  offline = false;
+  await fireEvent.press(screen.getByRole('button', { name: 'Retry session check' }));
+
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toEqual([]);
+});
+
+test('a late unlock response after session expiry does not notify the signed-out screen', async () => {
+  let time = 1_800_000;
+  let onChange: ((status: AppStateStatus) => void) | undefined;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((event, listener) => {
+    if (event === 'change') onChange = listener;
+    return { remove() {} };
+  });
+  let finish!: () => void;
+  const response = new Promise<void>((resolve) => { finish = resolve; });
+  const base = createMockOpenpath();
+  const provider = { ...base, async unlockEntry(command: Parameters<typeof base.unlockEntry>[0]) {
+    await response;
+    await base.unlockEntry(command);
+  } };
+  const nativeAlert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const Layout = () => <RootLayout provider={provider} now={() => time} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  const unlock = nativeAlert.mock.lastCall?.[2]?.find((button) => button.text === 'Unlock');
+  expect(unlock).toBeDefined();
+  await act(async () => { unlock?.onPress?.(); });
+  time = 2_700_000;
+  await act(async () => { onChange?.('active'); });
+  await waitFor(() => expect(screen).toHavePathname('/'));
+
+  await act(async () => { finish(); });
+
+  expect(screen.queryByText('Simulated unlock accepted')).not.toBeOnTheScreen();
+  expect(screen.queryByText('Unlock result unconfirmed')).not.toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toHaveLength(1);
 });
