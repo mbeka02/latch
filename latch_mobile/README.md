@@ -1,6 +1,6 @@
 # Latch
 
-Android-first Expo / React Native app for the IFSS assessment. **Phase 4 remains a simulated demonstration only.** It makes no Alta requests, operates no physical door and needs no backend.
+Android-first Expo / React Native app for the IFSS assessment. **Phase 5 implements the direct Openpath adapter and isolated Android transport.** Default demo mode makes no Alta requests and operates no physical door. Live APK/device and IFSS tenant verification remain phase 6 work; no backend is required.
 
 ## Try the demo
 
@@ -37,13 +37,29 @@ Unavailable access keeps its reason on screen and offers **Refresh access** and 
 
 [Sonner Native](https://sonner-native.netlify.app/) relays sign-in errors, unavailable access, accepted unlock requests and unconfirmed results. Notifications match the system light/dark theme, disappear after five seconds, and can be tapped or swiped away. The full-width positioning wrapper keeps them horizontally centered; their card width is capped to the window's safe area and 480 dp. Error guidance and door outcomes remain on screen after dismissal. Signing in or out clears previous session notifications. Notifications never dispatch or retry an unlock.
 
-Do not enter real employee credentials. Only the documented dummy accounts are handled. The current composition always selects the in-process mock adapter; there is no live adapter, environment toggle or network fallback.
+Use fictional credentials in the default demo build. Its in-process mock cannot validate real Alta accounts.
+
+## Direct Alta mode (phase 5)
+
+Build configuration selects `EXPO_PUBLIC_LATCH_MODE=demo` (default when omitted) or `EXPO_PUBLIC_LATCH_MODE=live`. There is no in-app environment switch and no fallback after a live error. An invalid mode stops initialization. `EXPO_PUBLIC_ALTA_NAMESPACE` optionally supplies a confirmed namespace nickname; omit it when unnecessary. These are public build settings, never credentials. The host is fixed in native code to `https://api.openpath.com/`; there is no configurable API URL, shared key or evaluator-entered entry ID.
+
+Live mode requires an Android build containing the local Expo module. **Expo Go, web and iOS do not provide that client**: requests fail closed rather than using generic fetch or demo data. The standalone APK and native bridge still need phase 6 compilation/device verification before real credentials are used. Evaluators will need only the resulting verified APK and their supported Alta account, not these developer settings.
+
+The live form offers **Use authenticator code** before the first attempt. Enter a current six-digit TOTP if the account requires it; re-enter the password/code after a rejection. The documented API supports the submitted TOTP field, but its public schemas do not establish specific MFA-required, invalid-code or SSO error names. Live login errors therefore stay generic; the demo's automatic MFA challenge remains simulated. SSO-only sign-in is explicitly unsupported. `forMobileLogin` is omitted because its semantics are undocumented; a tenant requirement for it must be resolved with supported evidence.
+
+The adapter uses native email/password login, the employee's raw JWT authorization header, current user/profile reads, user-scoped entries, existing paged credentials, and Cloud Key unlock. It identifies Cloud Keys by the returned `cloudKey` variant and sends the outer credential ID. Entries must carry readable site/zone context and a count consistent with all returned entries; missing/inconsistent context blocks selection. The entries schema declares no pagination inputs, so the app does not invent them. Credentials continue until an empty page, with inconsistent supplied counts rejected.
+
+Login-derived org/user IDs are saved only as lookup hints. Restoration checks each against the current header-authenticated user/profile response and matching identity, recovers current org names, and preserves the original local expiry cap. It neither decodes JWT claims nor calls a token-in-URL endpoint or rotating refresh endpoint. Missing hints require fresh sign-in; new memberships require fresh sign-in to enter the saved hint set. A denied or malformed association blocks restoration. Saved IDs grant no authority; every discovery/preflight/unlock remains subject to Alta's current permissions.
+
+Live confirmation explains that it requests a real unlock. Accepted feedback says **Unlock request accepted. Door position has not been confirmed.** Unauthorized responses, lost replies and session expiry use the same safe lifecycle/recovery rules as the demo. Local sign-out is available after an uncertain result without discarding its journal.
+
+See [official API contract evidence](docs/openpath-contract-evidence.md) and [Android transport evidence and remaining checks](docs/android-transport-evidence.md). These distinguish documented facts, app policies, fixture results and unverified tenant/device behavior.
 
 ## Implementation
 
 - **S1 — Authentication/session:** real Latch logic owns safe credential/MFA errors, expiry, restoration and account isolation. Screens subscribe to identity/status metadata and never receive tokens. Sign-out immediately clears the in-memory session and discovered selection, then removes the saved token.
 - **S2 — Door access:** real Latch logic resolves organisation associations, COE candidates and a currently valid existing Cloud Key, then owns the unlock lifecycle, recovery journal and acknowledgement gate. Screens subscribe to readable attempt state and receive session-bound selection references rather than tokens or provider IDs.
-- **S3 — Openpath adapter:** typed provider operations have an in-process adapter with fictional account/door data. `checkSession` represents a current authorized identity read, not JWT decoding or token refresh. Its live endpoint mapping belongs to phase 5. These normalized types are not a claim that the native Openpath JSON protocol is implemented.
+- **S3 — Openpath adapter:** typed provider operations have explicit in-process and live implementations. The live implementation normalizes documented provider JSON and uses a narrow Android-only transport. `checkSession` uses current user/profile reads with saved association hints, not JWT decoding or token refresh. Tests replace the HTTP/native boundary while retaining the real adapter and Latch rules.
 - **S4 — User journey:** the actual Router screens use those modules. A protected stack replaces the starter Home/Explore tabs. The demo label stays visible on sign-in and door screens.
 
 Resolved organisation/entry/credential IDs stay in provider data and private Latch state. The recovery journal records the originating account, organisation/user and entry context. Tests change entry/credential IDs to verify that the Latch rules use discovery rather than app configuration. The mock adapter's request history records simulated commands for tests and contains no provider token.
@@ -62,7 +78,7 @@ The clipped-toast screenshot traced to the tap-to-dismiss wrapper being centered
 
 ## Session behaviour
 
-The native composition uses [Expo SecureStore](https://docs.expo.dev/versions/v58.0.0/sdk/securestore/) with separate demo/live storage keys. The session record saves only the token, identity reference, environment/version and original session timestamps. The separate recovery journal described below contains attempt metadata. Passwords, codes, cached permissions and reusable door selection references are never saved. Android backup exclusion uses SecureStore's config plugin; actual Keystore and packaged backup behaviour still require device/build verification. SecureStore has no web implementation in this app; use Android/Expo Go for this phase.
+The native composition uses [Expo SecureStore](https://docs.expo.dev/versions/v58.0.0/sdk/securestore/) with separate demo/live storage keys. The session record saves only the token, identity reference, org/user lookup hints, environment/version and original session timestamps. The separate recovery journal described below contains attempt metadata. Passwords, codes, cached permissions and reusable door selection references are never saved. Android backup exclusion uses SecureStore's config plugin; actual Keystore and packaged backup behaviour still require device/build verification. SecureStore has no web implementation in this app; demo supports compatible Android/Expo Go, while live requires the custom native build.
 
 A **15-minute local cap** is an app policy, not an Alta requirement. Earlier reported provider expiry wins. Restart and foreground validation preserve the original deadline; there is no automatic refresh. Startup shows **Checking secure session…** until a current provider check completes. Discovery then reads current entry/credential data again. An outage never grants access from cached data; **Retry session check** deliberately rechecks, without sending an unlock.
 
@@ -87,7 +103,7 @@ Before dispatch, the module must successfully save an unresolved marker to `latc
 
 Unresolved history survives local logout, expiry and re-login for the same identity. Another identity sees none of its context and cannot acknowledge it; its own requests preserve that history. The journal retains unresolved records and prunes expired resolved records on later attempts. Its 100-record limit fails safely instead of discarding uncertainty. Session token deletion and recovery history use separate SecureStore keys.
 
-Startup/foreground validation reads the journal and current identity before rediscovering access. Backgrounding, unmounting, account replacement and expiry interrupt local work. Before dispatch, an interrupted read/write cannot later turn into a queued command; after dispatch, uncertainty remains. Late results cannot settle a newer attempt, change another account's feedback or expire a session through an obsolete preflight error. Stopping local work cannot retract a command already sent; the direct HTTP transport is phase 5 work.
+Startup/foreground validation reads the journal and current identity before rediscovering access. Backgrounding, unmounting, account replacement and expiry interrupt local work. Before dispatch, an interrupted read/write cannot later turn into a queued command; after dispatch, uncertainty remains. Late results cannot settle a newer attempt, change another account's feedback or expire a session through an obsolete preflight error. Stopping local work cannot retract a command already sent. The direct HTTP transport never queues or retries a command; its native deadline/cancellation also cannot undo transmission.
 
 Unknown feedback remains after toast dismissal, refresh and context selection. **Acknowledge result** only saves acknowledgement; it does not dispatch, resolve the physical outcome or bypass fresh access checks. A subsequent attempt requires the confirmation modal again. Reconnect, resume, sign-in and discovery never automatically retry, queue or replay an unlock. The guard applies to this app instance and does not provide vendor idempotency or coordination with other devices.
 
@@ -175,12 +191,32 @@ Phase 4 continued through S2 and S4, substituting only the external provider, st
 
 Further checks cover failed acknowledgement/resolution writes, missing storage, corrupt journals, late preflight/native writes, logout/re-login/account isolation and credential-secret exclusion. Journey tests exercise offline-before-dispatch, acknowledgement followed by fresh confirmation, actual SecureStore adapter calls with mocked native storage, AppState interruption, foreground checks and a fresh Router mount. The native restart test preserves uncertainty without issuing a second command.
 
-**Latest automated result:** 2 suites, 98 tests passing; lint and typecheck passing with no warnings. Notification tests render the actual Sonner component. Phase 4 reuses the existing SecureStore dependency and config plugin. The earlier Phase 2 Android production JavaScript/Hermes export passed; Phase 4 has not been exported or packaged as an APK.
+Phase 5 continued primarily at S3, retaining real S1/S2 modules and selected S4 journeys:
+
+| Seam | Observed red | Green behaviour |
+| --- | --- | --- |
+| S3 | No HTTP adapter | Documented native login and current profile normalize into a personal session |
+| S3 | Incomplete/contradictory login data was accepted | Invalid identity, token, expiry and association data fail safely |
+| S3 | TOTP/namespace fields were absent | Documented fields are sent without guessed mobile/SSO behavior |
+| S3 | Status failures were ignored or inferred from body text | Safe status policies, with no provider detail or speculative MFA classification |
+| S3/S1 | Restoration had no provider mapping or saved hints | Current profile reads restore the same identity and original expiry cap |
+| S3 | Discovery/unlock operations were absent | Contextual entries, paged Cloud Keys, numeric entry IDs and empty `204` |
+| S3 | Partial entries and contradictory credentials were usable | Incomplete/ambiguous protocol data blocks access |
+| S3 | Stalled requests were unbounded | Fifteen-second deadline and no adapter retry |
+| S3 native | Redirect handling was absent | Local HTTPS fixture receives credentials once; redirect destination receives none |
+| S3 native | OkHttp replayed a `503 Retry-After: 0` unlock/read | One-shot POST bodies, disabled recovery and a one-exchange budget |
+| S3 native | Responses/queued work were unrestricted | Known routes only, bounded response, cancellation and closed-client rejection |
+| S3 native | Slow streaming exceeded OkHttp's configured deadline with Expo's Okio | Independent native cancellation timer bounds the call |
+| S4 | Live journey showed demo-only labels and no proactive MFA input | Actual screens use explicit live wording/TOTP and truthful acceptance feedback |
+| S4 | Live build without the module selected mock data | Explicit composition fails closed without native transport |
+| S4 | Unknown-result gate prevented confirming local sign-out | Sign-out remains available while recovery history is retained |
+
+**Latest automated result:** 4 Jest suites, 134 tests passing; 10 native JVM transport tests passing; lint and typecheck passing. The JVM harness uses local HTTP/TLS fixtures; see its evidence note for dependencies and checks. Notification tests render actual Sonner. The live-mode Android production JavaScript/Hermes export passed, and Expo autolinking discovers the native module. Neither is an APK/native compilation check.
 
 ## Evidence limits and next phases
 
-Phase 4 used automated tests without launching an emulator or dev server. Device checks for the recovery screens, actual process termination, native storage failure behaviour and background timing remain manual. No Phase 4 APK build, live tenant test or physical unlock was performed. JavaScript journey tests do not establish native layout, keyboard, TalkBack or hardware behaviour. App icons/splash assets remain starter assets pending the branding/delivery phase.
+Phase 5 used deterministic HTTP fixtures, local JVM HTTP/TLS fixtures and a terminating production export, without launching an emulator or app dev server. Device checks for recovery screens, actual process termination, native bridge registration, storage behavior and background timing remain manual. No APK build, live tenant test or physical unlock was performed. JavaScript journey tests do not establish native layout, keyboard, TalkBack or hardware behavior. App icons/splash assets remain starter assets pending the branding/delivery phase.
 
-Phase 4 completes the mock-backed safe unlock lifecycle. Phase 5 is next: the direct HTTPS adapter, protocol tests and native transport security checks. A request already sent cannot be undone by local expiry or interruption. Real Alta MFA/SSO eligibility, provider checks, HTTP cancellation/redirect behaviour and revocation propagation remain unverified.
+Phase 5 completes the tenant-free direct adapter and native transport implementation/evidence. Phase 6 is next: native APK compilation/inspection, device verification and IFSS handoff. The [transport evidence note](docs/android-transport-evidence.md#evidence-boundaries--phase-6) records the remaining build/device gates. Real account/namespace compatibility, exact provider error behavior, permission enforcement and revocation propagation remain IFSS acceptance checks. A sent request cannot be undone by local expiry or interruption.
 
 The detailed implementation plan remains in the workspace at `../implementation-plan.md`.
