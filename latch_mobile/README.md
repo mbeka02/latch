@@ -1,6 +1,6 @@
 # Latch
 
-Android-first Expo / React Native app for the IFSS assessment. **Phase 3 remains a simulated demonstration only.** It makes no Alta requests, operates no physical door and needs no backend.
+Android-first Expo / React Native app for the IFSS assessment. **Phase 4 remains a simulated demonstration only.** It makes no Alta requests, operates no physical door and needs no backend.
 
 ## Try the demo
 
@@ -19,6 +19,9 @@ Use these fictional accounts with password **`latch-demo-only`**:
 | `ambiguous@latch.example` | Signs in, but duplicate COE entries have indistinguishable site/zone context |
 | `no-key@latch.example` | Signs in with a mobile credential but no usable Cloud Key |
 | `denied@latch.example` | Signs in, but the provider denies entry discovery |
+| `unlock-denied@latch.example` | Discovery works; the simulated unlock is explicitly denied |
+| `uncertain@latch.example` | Records a simulated command, then loses its response; acknowledgement is required |
+| `timeout@latch.example` | Records a simulated command and never answers; the 15-second deadline restores an unknown result |
 
 For MFA, the first attempt reveals the code field. Re-enter the password with the code. Passwords and codes are cleared after each submission and on **Cancel sign-in**. Changing the email resets the MFA form. The fixed demo code is not a real TOTP validator, seed or challenge-token protocol.
 
@@ -26,7 +29,9 @@ The password starts hidden. Tap the eye icon to show or hide it; the entered val
 
 Sign in to discover **COE Door (simulated)**. Tap **Unlock COE Door**, then choose **Cancel** or **Unlock** in the themed confirmation modal. Confirmation shows **Simulated unlock accepted. No physical door was operated.** Tap **Sign out** to open a confirmation modal. Choose **Sign out** inside the modal to end the session, or **Cancel** to keep using the door screen.
 
-With `multi@latch.example`, choose **Engineering demo**, then **COE Door · South building · COE**. The unlock confirmation shows that organisation, site and zone. **Change door** returns to the candidate list; **Change organisation** clears the previous door selection and feedback. A single organisation/door proceeds automatically. Discovery never sends an unlock.
+With `multi@latch.example`, choose **Engineering demo**, then **COE Door · South building · COE**. The unlock confirmation shows that organisation, site and zone. **Change door** returns to the candidate list; **Change organisation** clears the previous door selection. Unresolved attempt feedback remains visible with its original context. A single organisation/door proceeds automatically. Discovery never sends an unlock.
+
+To try phase 4, confirm an unlock as `uncertain@latch.example`. Dismiss the toast or refresh: the unknown result remains and Unlock stays disabled. Background/reopen or restart the app to recover the same result. **Acknowledge result** saves acknowledgement without sending anything. Once the three-second cooldown ends, another attempt still requires opening and confirming the modal. This account deliberately loses every response; use `demo@latch.example` for accepted results, `unlock-denied@latch.example` for denial, or `timeout@latch.example` to exercise the pending state and deadline.
 
 Unavailable access keeps its reason on screen and offers **Refresh access** and sign-out. Refresh repeats discovery only; after access is restored, unlocking still requires a fresh confirmation. Fix missing permissions, credentials or ambiguous names in the provider's configuration; refreshing cannot create access.
 
@@ -37,11 +42,11 @@ Do not enter real employee credentials. Only the documented dummy accounts are h
 ## Implementation
 
 - **S1 — Authentication/session:** real Latch logic owns safe credential/MFA errors, expiry, restoration and account isolation. Screens subscribe to identity/status metadata and never receive tokens. Sign-out immediately clears the in-memory session and discovered selection, then removes the saved token.
-- **S2 — Door access:** real Latch logic resolves organisation associations, COE candidates and a currently valid existing Cloud Key. Screens receive session-bound selection references and readable context rather than tokens or provider IDs.
+- **S2 — Door access:** real Latch logic resolves organisation associations, COE candidates and a currently valid existing Cloud Key, then owns the unlock lifecycle, recovery journal and acknowledgement gate. Screens subscribe to readable attempt state and receive session-bound selection references rather than tokens or provider IDs.
 - **S3 — Openpath adapter:** typed provider operations have an in-process adapter with fictional account/door data. `checkSession` represents a current authorized identity read, not JWT decoding or token refresh. Its live endpoint mapping belongs to phase 5. These normalized types are not a claim that the native Openpath JSON protocol is implemented.
 - **S4 — User journey:** the actual Router screens use those modules. A protected stack replaces the starter Home/Explore tabs. The demo label stays visible on sign-in and door screens.
 
-All organisation/entry/credential IDs are confined to provider data. Tests change entry/credential IDs to verify that the Latch rules use discovery rather than app configuration. The mock adapter's request history records simulated commands for tests and contains no provider token.
+Resolved organisation/entry/credential IDs stay in provider data and private Latch state. The recovery journal records the originating account, organisation/user and entry context. Tests change entry/credential IDs to verify that the Latch rules use discovery rather than app configuration. The mock adapter's request history records simulated commands for tests and contains no provider token.
 
 ## Discovery and access decisions
 
@@ -57,13 +62,34 @@ The clipped-toast screenshot traced to the tap-to-dismiss wrapper being centered
 
 ## Session behaviour
 
-The native composition uses [Expo SecureStore](https://docs.expo.dev/versions/v58.0.0/sdk/securestore/) with separate demo/live storage keys. It saves only the token, identity reference, environment/version and original session timestamps. Passwords, codes, cached permissions and door selections are never saved. Android backup exclusion uses SecureStore's config plugin; actual Keystore and packaged backup behaviour still require device/build verification. SecureStore has no web implementation in this app; use Android/Expo Go for this phase.
+The native composition uses [Expo SecureStore](https://docs.expo.dev/versions/v58.0.0/sdk/securestore/) with separate demo/live storage keys. The session record saves only the token, identity reference, environment/version and original session timestamps. The separate recovery journal described below contains attempt metadata. Passwords, codes, cached permissions and reusable door selection references are never saved. Android backup exclusion uses SecureStore's config plugin; actual Keystore and packaged backup behaviour still require device/build verification. SecureStore has no web implementation in this app; use Android/Expo Go for this phase.
 
 A **15-minute local cap** is an app policy, not an Alta requirement. Earlier reported provider expiry wins. Restart and foreground validation preserve the original deadline; there is no automatic refresh. Startup shows **Checking secure session…** until a current provider check completes. Discovery then reads current entry/credential data again. An outage never grants access from cached data; **Retry session check** deliberately rechecks, without sending an unlock.
 
 Expiry, definitive token rejection, sign-out and account replacement invalidate door choices. Delayed login, restoration, discovery and unlock responses are bound to their originating app session. Native storage operations are serialized within that app instance, so a delayed write cannot undo a later logout. The UI suppresses notifications from a door screen that has already lost its session.
 
 Storage read/write/delete failures block authentication with recovery guidance. If deletion fails, logout attempts to overwrite the stored token with an unusable value; recovery clears it before fresh sign-in. If both native mutations fail, physical token erasure cannot be guaranteed. Local sign-out does not claim vendor-wide token revocation.
+
+## Unlock lifecycle and recovery
+
+The module permits one active attempt per app instance, including access rechecks and storage preparation. Repeated taps are blocked in both the screens and the module. A **15-second local deadline** bounds the attempt; a **three-second local cooldown** follows a result. These values are app policy, not Alta requirements or relock indicators. Restoring an unresolved attempt starts a fresh three-second cooldown, which acknowledgement preserves across another restart.
+
+The app distinguishes these outcomes:
+
+| Outcome | Meaning and next action |
+| --- | --- |
+| Accepted | Provider acknowledgement and a saved local resolution; the app makes no claim about physical door position |
+| Denied | An explicit provider rejection, shown separately from uncertainty |
+| Not sent | Preflight, storage preparation or interruption prevented dispatch; recover access and deliberately confirm a new attempt |
+| Unknown | A dispatched request lost its response, hit its deadline, was interrupted, or could not save its resolution; check the door and save acknowledgement before attempting again |
+
+Before dispatch, the module must successfully save an unresolved marker to `latch.<environment>.attempts.v1`. It contains the originating identity/session timestamp, organisation/user/entry context, readable door context and timestamps. It contains no password, MFA code, token, credential secret or executable replay command. Missing storage cannot fall back to an in-memory unlock. Malformed, unreadable or wrong-environment journals block access with safe feedback. A failure to save the terminal resolution leaves uncertainty in place.
+
+Unresolved history survives local logout, expiry and re-login for the same identity. Another identity sees none of its context and cannot acknowledge it; its own requests preserve that history. The journal retains unresolved records and prunes expired resolved records on later attempts. Its 100-record limit fails safely instead of discarding uncertainty. Session token deletion and recovery history use separate SecureStore keys.
+
+Startup/foreground validation reads the journal and current identity before rediscovering access. Backgrounding, unmounting, account replacement and expiry interrupt local work. Before dispatch, an interrupted read/write cannot later turn into a queued command; after dispatch, uncertainty remains. Late results cannot settle a newer attempt, change another account's feedback or expire a session through an obsolete preflight error. Stopping local work cannot retract a command already sent; the direct HTTP transport is phase 5 work.
+
+Unknown feedback remains after toast dismissal, refresh and context selection. **Acknowledge result** only saves acknowledgement; it does not dispatch, resolve the physical outcome or bypass fresh access checks. A subsequent attempt requires the confirmation modal again. Reconnect, resume, sign-in and discovery never automatically retry, queue or replay an unlock. The guard applies to this app instance and does not provide vendor idempotency or coordination with other devices.
 
 ## Checks and TDD evidence
 
@@ -131,12 +157,30 @@ Phase 3 continued through S2 and S4:
 
 Regression checks also cover future/missing/mobile/ambiguous keys, later-page denial, non-advancing pages, credential expiry/replacement before dispatch, previous-account references, organisation changes and recovery from denied reads. They use the real Latch modules and replace only the external provider/clock/native boundaries.
 
-**Latest automated result:** 2 suites, 71 tests passing; lint and typecheck passing. Notification tests render the actual Sonner component. Phase 2 adds SDK-compatible `expo-secure-store` and its config plugin. The Phase 2 Android production JavaScript/Hermes export passed; this checks Metro compilation, not APK packaging or native runtime behaviour.
+Phase 4 continued through S2 and S4, substituting only the external provider, storage and clock:
+
+| Seam | Observed red | Green behaviour |
+| --- | --- | --- |
+| S2 | A lost response threw a generic error; explicit denial became uncertainty | Accepted, denied and unknown results remain distinct; rediscovery never replays a command |
+| S2 | Concurrent requests dispatched twice; another immediate request succeeded | One pending attempt and a three-second cooldown enforced by the module |
+| S2 | Unlock dispatched despite a failed pending write | Durable marker required before dispatch |
+| S2 | Restart forgot uncertainty; known acceptance restored as unresolved | Journal restores unknown state or the saved cooldown appropriately |
+| S2 | Acknowledgement was absent | Saved acknowledgement changes only the recovery gate |
+| S2 | An unanswered command stayed pending indefinitely | Fifteen-second deadline, unknown result and ignored late reply |
+| S2 | Background interruption was unsupported | Interruption preserves uncertainty and a late reply cannot settle a newer attempt |
+| S2 | An obsolete preflight error expired the current session | Stopped attempts cannot change current session or result state |
+| S2 | Restart bypassed the interrupted attempt's cooldown | Restored uncertainty and saved acknowledgement preserve a fresh cooldown |
+| S4 | An unknown result was displayed as simulated acceptance | Warning toast, persistent context and explicit acknowledgement gate |
+| S4 | New failure demo accounts could not reach their required states | Distinct denied, uncertain and timeout scenarios |
+
+Further checks cover failed acknowledgement/resolution writes, missing storage, corrupt journals, late preflight/native writes, logout/re-login/account isolation and credential-secret exclusion. Journey tests exercise offline-before-dispatch, acknowledgement followed by fresh confirmation, actual SecureStore adapter calls with mocked native storage, AppState interruption, foreground checks and a fresh Router mount. The native restart test preserves uncertainty without issuing a second command.
+
+**Latest automated result:** 2 suites, 98 tests passing; lint and typecheck passing with no warnings. Notification tests render the actual Sonner component. Phase 4 reuses the existing SecureStore dependency and config plugin. The earlier Phase 2 Android production JavaScript/Hermes export passed; Phase 4 has not been exported or packaged as an APK.
 
 ## Evidence limits and next phases
 
-Phase 3 used automated tests without launching an emulator or dev server. Device checks for the new selection/recovery screens remain manual. No Phase 3 APK build, live tenant test or physical unlock was performed. JavaScript journey tests do not establish native layout, keyboard, TalkBack or hardware behaviour. App icons/splash assets remain starter assets pending the branding/delivery phase.
+Phase 4 used automated tests without launching an emulator or dev server. Device checks for the recovery screens, actual process termination, native storage failure behaviour and background timing remain manual. No Phase 4 APK build, live tenant test or physical unlock was performed. JavaScript journey tests do not establish native layout, keyboard, TalkBack or hardware behaviour. App icons/splash assets remain starter assets pending the branding/delivery phase.
 
-Phase 3 completes mock-backed discovery and access decisions. Durable pending markers, deadlines, cooldown and interruption/unknown-result recovery belong to phase 4, which is next. A request already sent cannot be undone by local expiry; interrupted-attempt recovery is not implemented yet. The direct HTTPS adapter comes in phase 5. Real Alta MFA/SSO eligibility, provider checks and revocation propagation remain unverified.
+Phase 4 completes the mock-backed safe unlock lifecycle. Phase 5 is next: the direct HTTPS adapter, protocol tests and native transport security checks. A request already sent cannot be undone by local expiry or interruption. Real Alta MFA/SSO eligibility, provider checks, HTTP cancellation/redirect behaviour and revocation propagation remain unverified.
 
 The detailed implementation plan remains in the workspace at `../implementation-plan.md`.
