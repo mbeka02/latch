@@ -17,15 +17,25 @@ type DoorState =
   | { status: 'unavailable'; message: string };
 
 export default function DoorScreen() {
-  const { app, session, signOut } = useLatch();
+  const { app, session, signOut, unlockState, coolingDown } = useLatch();
   const [state, setState] = useState<DoorState>({ status: 'loading' });
   const [organisations, setOrganisations] = useState<OrganisationChoice[]>([]);
   const [organisationKey, setOrganisationKey] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [outcome, setOutcome] = useState('');
+  const [acknowledging, setAcknowledging] = useState(false);
+  const pending = unlockState.status === 'pending';
+  const unlockBlocked = pending || coolingDown || unlockState.requiresAcknowledgement || acknowledging;
+  const outcome = unlockState.status === 'accepted'
+    ? 'Simulated unlock accepted. No physical door was operated.'
+    : unlockState.status === 'denied' ? 'The provider denied the unlock request.'
+    : unlockState.status === 'unknown' ? "We couldn't confirm the result. Check before trying again."
+    : unlockState.status === 'not-sent' ? 'Unlock request not sent. ' + (unlockState.error ? new AccessError(unlockState.error).message : '')
+    : '';
+  const showOutcome = outcome && (unlockState.status !== 'accepted' || (state.status === 'ready' &&
+    state.door.organisation === unlockState.door?.organisation && state.door.site === unlockState.door.site &&
+    state.door.zone === unlockState.door.zone && state.door.name === unlockState.door.name));
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -56,17 +66,18 @@ export default function DoorScreen() {
   }, [app, organisationKey, refresh]);
 
   async function requestUnlock(choiceKey: string) {
-    setPending(true);
-    setOutcome('');
     try {
       const result = await app.doors.requestUnlock(choiceKey);
       if (!mounted.current) return;
-      setOutcome(result.simulated
-        ? 'Simulated unlock accepted. No physical door was operated.'
-        : 'Unlock request accepted. Door position has not been confirmed.');
-      toast.success(result.simulated ? 'Simulated unlock accepted' : 'Unlock request accepted', {
-        description: result.simulated ? 'No physical door was operated.' : 'Door position has not been confirmed.',
-      });
+      if (result.status === 'unknown') {
+        toast.warning('Unlock result unconfirmed', { description: 'Check the door before trying again.' });
+      } else if (result.status === 'denied') {
+        toast.error('Unlock request denied', { description: 'The provider did not authorize the request.' });
+      } else {
+        toast.success(result.simulated ? 'Simulated unlock accepted' : 'Unlock request accepted', {
+          description: result.simulated ? 'No physical door was operated.' : 'Door position has not been confirmed.',
+        });
+      }
     } catch (error) {
       if (!mounted.current || ['stale-operation', 'expired'].includes(safeAccessError(error).code)) return;
       const failure = safeAccessError(error);
@@ -75,15 +86,12 @@ export default function DoorScreen() {
         toast.error('COE access unavailable', { description: failure.message });
         return;
       }
-      setOutcome("We couldn't confirm the result. Check before trying again.");
-      toast.warning('Unlock result unconfirmed', { description: 'Check the door before trying again.' });
-    } finally {
-      if (mounted.current) setPending(false);
+      toast.error('Unlock request not sent', { description: failure.message });
     }
   }
 
   function confirmUnlock() {
-    if (state.status !== 'ready' || confirming || confirmingSignOut || pending) return;
+    if (state.status !== 'ready' || confirming || confirmingSignOut || unlockBlocked) return;
     setConfirming(true);
   }
 
@@ -110,22 +118,22 @@ export default function DoorScreen() {
           <ThemedText selectable themeColor="textSecondary">
             {state.door.organisation} · {state.door.site} · {state.door.zone}
           </ThemedText>
-          <ThemedText>{pending ? 'Request in progress' : 'Ready to request a simulated unlock'}</ThemedText>
+          <ThemedText>{pending ? 'Request in progress' : unlockState.requiresAcknowledgement ? 'Previous result needs acknowledgement'
+            : coolingDown ? 'Please wait before another request' : 'Ready to request a simulated unlock'}</ThemedText>
           <ActionButton
             label={pending ? 'Requesting unlock…' : `Unlock ${state.door.name}`}
-            disabled={confirming || confirmingSignOut || pending}
+            disabled={confirming || confirmingSignOut || unlockBlocked}
             onPress={confirmUnlock}
           />
-          {outcome ? <ThemedText selectable accessibilityLiveRegion="polite">{outcome}</ThemedText> : null}
           {state.choices.length > 1 ? <ActionButton label="Change door" secondary disabled={confirming || confirmingSignOut || pending}
-            onPress={() => { setOutcome(''); toast.dismiss(); setState({ status: 'doors', choices: state.choices }); }} /> : null}
+            onPress={() => { toast.dismiss(); setState({ status: 'doors', choices: state.choices }); }} /> : null}
           <AppModal
             visible={confirming}
             title={`Unlock ${state.door.name}?`}
             onClose={() => setConfirming(false)}
             actions={<>
-              <ActionButton label="Unlock" disabled={!confirming || pending} onPress={() => {
-                if (!confirming || pending) return;
+              <ActionButton label="Unlock" disabled={!confirming || unlockBlocked} onPress={() => {
+                if (!confirming || unlockBlocked) return;
                 setConfirming(false);
                 void requestUnlock(state.door.key);
               }} />
@@ -136,13 +144,32 @@ export default function DoorScreen() {
           </AppModal>
         </>
       ) : null}
+      {showOutcome ? <ThemedText selectable accessibilityLiveRegion="polite">{outcome}</ThemedText> : null}
+      {unlockState.status === 'unknown' && unlockState.door ? <>
+        <ThemedText selectable themeColor="textSecondary">
+          Previous request: {unlockState.door.name} · {unlockState.door.organisation} · {unlockState.door.site} · {unlockState.door.zone}
+        </ThemedText>
+        {unlockState.requiresAcknowledgement ? <>
+          <ThemedText>Check the door before acknowledging. This will not send another unlock request.</ThemedText>
+          <ActionButton label={acknowledging ? 'Saving acknowledgement…' : 'Acknowledge result'} secondary
+            disabled={acknowledging || pending || confirmingSignOut} onPress={async () => {
+              if (acknowledging) return;
+              setAcknowledging(true);
+              try { await app.doors.acknowledgeUnknown(); toast.dismiss(); }
+              catch (error) {
+                if (mounted.current && !['expired', 'stale-operation'].includes(safeAccessError(error).code))
+                  toast.error('Acknowledgement not saved', { description: safeAccessError(error).message });
+              } finally { if (mounted.current) setAcknowledging(false); }
+            }} />
+        </> : <ThemedText>Acknowledgement saved. A new request still needs confirmation.</ThemedText>}
+      </> : null}
       {state.status === 'ready' || state.status === 'unavailable' ? <ActionButton label="Refresh access" secondary
         disabled={confirming || confirmingSignOut || pending} onPress={() => {
-          setState({ status: 'loading' }); setOutcome(''); toast.dismiss(); setRefresh((value) => value + 1);
+          setState({ status: 'loading' }); toast.dismiss(); setRefresh((value) => value + 1);
         }} /> : null}
       {organisations.length > 1 && state.status !== 'organisations' ? <ActionButton label="Change organisation" secondary
         disabled={confirming || confirmingSignOut || pending || state.status === 'loading'} onPress={() => {
-          setOutcome(''); toast.dismiss(); setState({ status: 'loading' }); setOrganisationKey(undefined); setRefresh((value) => value + 1);
+          toast.dismiss(); setState({ status: 'loading' }); setOrganisationKey(undefined); setRefresh((value) => value + 1);
         }} /> : null}
       <ThemedText selectable>{session?.email}</ThemedText>
       <ActionButton label="Sign out" secondary disabled={confirming || confirmingSignOut || pending}
@@ -153,7 +180,7 @@ export default function DoorScreen() {
         onClose={() => setConfirmingSignOut(false)}
         actions={<>
           <ActionButton label="Sign out" disabled={!confirmingSignOut || pending} onPress={() => {
-            if (!confirmingSignOut || pending) return;
+            if (!confirmingSignOut || unlockBlocked) return;
             setConfirmingSignOut(false);
             signOut();
           }} />

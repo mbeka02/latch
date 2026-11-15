@@ -274,8 +274,136 @@ test('an unlock failure shows a warning toast and preserves the uncertain result
 
   expect(screen.queryByText('Unlock result unconfirmed')).not.toBeOnTheScreen();
   expect(screen.getByText("We couldn't confirm the result. Check before trying again.")).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Acknowledge result' })).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Unlock COE Door' })).toBeDisabled();
   expect(screen.queryByText('Simulated unlock accepted')).not.toBeOnTheScreen();
   expect(screen.queryByText('Provider details should not be displayed.')).not.toBeOnTheScreen();
+});
+
+test('acknowledgement and refresh never send another unlock without a fresh confirmation', async () => {
+  let time = 1_800_000;
+  let lost = true;
+  const base = createMockOpenpath();
+  const provider = { ...base, async unlockEntry(command: Parameters<typeof base.unlockEntry>[0]) {
+    await base.unlockEntry(command); if (lost) throw new Error('Lost response');
+  } };
+  const Layout = () => <RootLayout provider={provider} now={() => time} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Unlock' }));
+  await screen.findByRole('button', { name: 'Acknowledge result' });
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh access' }));
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeDisabled();
+  expect(base.getUnlockRequests()).toHaveLength(1);
+  time += 3000;
+  lost = false;
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Acknowledge result' }));
+  expect(await screen.findByText('Acknowledgement saved. A new request still needs confirmation.')).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Unlock COE Door' })).toBeEnabled();
+  expect(base.getUnlockRequests()).toHaveLength(1);
+  await fireEvent.press(screen.getByRole('button', { name: 'Unlock COE Door' }));
+  expect(base.getUnlockRequests()).toHaveLength(1);
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Unlock' }));
+  expect(await screen.findByText('Simulated unlock accepted')).toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toHaveLength(2);
+});
+
+test('the uncertain demo requires acknowledgement instead of claiming an accepted unlock', async () => {
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'uncertain@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Unlock' }));
+
+  expect(await screen.findByRole('button', { name: 'Acknowledge result' })).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Unlock COE Door' })).toBeDisabled();
+  expect(screen.queryByText('Simulated unlock accepted')).not.toBeOnTheScreen();
+});
+
+test('an unlock denial stays distinct from an unknown result in the demo UI', async () => {
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'unlock-denied@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Unlock' }));
+
+  expect(await screen.findByText('The provider denied the unlock request.')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Acknowledge result' })).not.toBeOnTheScreen();
+  expect(screen.queryByText('Simulated unlock accepted')).not.toBeOnTheScreen();
+});
+
+test('offline preflight reports not sent and reconnection does not queue an unlock', async () => {
+  const base = createMockOpenpath();
+  let offline = false;
+  const provider = { ...base, async listUserEntries(context: Parameters<typeof base.listUserEntries>[0]) {
+    if (offline) throw new Error('Raw connection details');
+    return base.listUserEntries(context);
+  } };
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  offline = true;
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Unlock' }));
+  expect(await screen.findByText('Unlock request not sent')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Acknowledge result' })).not.toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toEqual([]);
+  offline = false;
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh access' }));
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeEnabled();
+  expect(base.getUnlockRequests()).toEqual([]);
+});
+
+test('native interruption and restart restore the employee’s unknown result without replaying it', async () => {
+  const nativeValues = new Map<string, string>();
+  jest.spyOn(SecureStore, 'getItemAsync').mockImplementation(async (key) => nativeValues.get(key) ?? null);
+  jest.spyOn(SecureStore, 'setItemAsync').mockImplementation(async (key, value) => { nativeValues.set(key, value); });
+  jest.spyOn(SecureStore, 'deleteItemAsync').mockImplementation(async (key) => { nativeValues.delete(key); });
+  let onChange: ((state: AppStateStatus) => void) | undefined;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((event, listener) => {
+    if (event === 'change') onChange = listener;
+    return { remove() {} };
+  });
+  let finish!: () => void;
+  let started!: () => void;
+  const dispatched = new Promise<void>((resolve) => { started = resolve; });
+  const response = new Promise<void>((resolve) => { finish = resolve; });
+  const base = createMockOpenpath();
+  const provider = { ...base, async unlockEntry(command: Parameters<typeof base.unlockEntry>[0]) {
+    await base.unlockEntry(command); started(); await response;
+  } };
+  const Layout = () => <RootLayout provider={provider} />;
+  const first = await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Unlock' }));
+  await dispatched;
+  expect(screen.getByRole('button', { name: 'Requesting unlock…' })).toBeDisabled();
+  await act(async () => { onChange?.('background'); onChange?.('active'); });
+  expect(await screen.findByRole('button', { name: 'Acknowledge result' })).toBeOnTheScreen();
+  await act(async () => { finish(); });
+  expect(screen.queryByText('Simulated unlock accepted')).not.toBeOnTheScreen();
+  await first.unmount();
+
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  expect(await screen.findByRole('button', { name: 'Acknowledge result' })).toBeOnTheScreen();
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeDisabled();
+  expect(base.getUnlockRequests()).toHaveLength(1);
+  const journal = nativeValues.get('latch.demo.attempts.v1');
+  expect(journal).toBeDefined();
+  expect(journal).not.toContain('simulated-session:');
+  expect(journal).not.toContain('latch-demo-only');
 });
 
 test('unavailable door access shows an error toast while unlock remains unavailable', async () => {

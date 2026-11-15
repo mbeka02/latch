@@ -2,14 +2,16 @@ import { createContext, use, useEffect, useState, useSyncExternalStore, type Pro
 import { AppState } from 'react-native';
 
 import type { Openpath, SignInInput, UserSession } from '@/lib/openpath';
-import { createLatch, type AuthSnapshot, type SessionOptions } from '@/services/latch';
+import { createLatch, type AuthSnapshot, type SessionOptions, type UnlockSnapshot } from '@/services/latch';
 import { createMockOpenpath } from '@/services/mocks/openpath';
-import { secureSessionStorage } from '@/storage/session';
+import { secureAttemptStorage, secureSessionStorage } from '@/storage/session';
 
 type LatchContextValue = {
   app: ReturnType<typeof createLatch>;
   session: UserSession | null;
   authState: AuthSnapshot;
+  unlockState: UnlockSnapshot;
+  coolingDown: boolean;
   retrySession(): void;
   signIn(input: SignInInput): Promise<void>;
   signOut(): void;
@@ -17,13 +19,23 @@ type LatchContextValue = {
 
 const LatchContext = createContext<LatchContextValue | null>(null);
 
-export function LatchProvider({ children, provider, storage, now = Date.now }: PropsWithChildren<{ provider?: Openpath } & SessionOptions>) {
+export function LatchProvider({ children, provider, storage, attemptStorage, now = Date.now }: PropsWithChildren<{ provider?: Openpath } & SessionOptions>) {
   // One app instance per mount. There is no live adapter or runtime environment switch yet.
   const [app] = useState(() => {
     const adapter = provider ?? createMockOpenpath();
-    return createLatch(adapter, { now, storage: storage ?? secureSessionStorage(adapter.environment) });
+    return createLatch(adapter, { now, storage: storage ?? secureSessionStorage(adapter.environment),
+      attemptStorage: attemptStorage ?? secureAttemptStorage(adapter.environment) });
   });
   const authState = useSyncExternalStore(app.auth.subscribe, app.auth.getSnapshot, app.auth.getSnapshot);
+  const unlockState = useSyncExternalStore(app.doors.subscribe, app.doors.getSnapshot, app.doors.getSnapshot);
+  const [completedCooldown, setCompletedCooldown] = useState(0);
+  const coolingDown = unlockState.cooldownUntil > Math.max(now(), completedCooldown);
+  useEffect(() => {
+    const remaining = unlockState.cooldownUntil - now();
+    if (remaining <= 0) return;
+    const timer = setTimeout(() => setCompletedCooldown(unlockState.cooldownUntil), remaining);
+    return () => clearTimeout(timer);
+  }, [unlockState.cooldownUntil, now]);
   function retrySession() { void app.auth.restore().catch(() => {}); }
   useEffect(() => {
     void app.auth.restore().catch(() => {});
@@ -35,9 +47,10 @@ export function LatchProvider({ children, provider, storage, now = Date.now }: P
   }, [app, authState.session, authState.expiresAt, now]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') app.doors.interruptUnlock();
       if (state === 'active' && app.auth.getSession()) void app.auth.restore().catch(() => {});
     });
-    return () => subscription.remove();
+    return () => { subscription.remove(); app.doors.interruptUnlock(); };
   }, [app]);
 
   async function signIn(input: SignInInput) {
@@ -48,7 +61,7 @@ export function LatchProvider({ children, provider, storage, now = Date.now }: P
     void app.auth.signOut().catch(() => {});
   }
 
-  return <LatchContext value={{ app, session: authState.session, authState, retrySession, signIn, signOut }}>{children}</LatchContext>;
+  return <LatchContext value={{ app, session: authState.session, authState, unlockState, coolingDown, retrySession, signIn, signOut }}>{children}</LatchContext>;
 }
 
 export function useLatch() {

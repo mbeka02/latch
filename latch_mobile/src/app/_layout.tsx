@@ -10,12 +10,12 @@ import type { SessionOptions } from '@/services/latch';
 import { AccessScreen } from '@/components/access-screen';
 import { ThemedText } from '@/components/themed-text';
 
-export default function RootLayout({ provider, storage, now }: { provider?: Openpath } & SessionOptions = {}) {
+export default function RootLayout({ provider, storage, attemptStorage, now }: { provider?: Openpath } & SessionOptions = {}) {
   const colorScheme = useColorScheme();
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <LatchProvider provider={provider} storage={storage} now={now}>
+        <LatchProvider provider={provider} storage={storage} attemptStorage={attemptStorage} now={now}>
           <SessionStack />
           <Notifications />
         </LatchProvider>
