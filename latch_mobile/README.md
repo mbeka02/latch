@@ -55,6 +55,12 @@ Live confirmation explains that it requests a real unlock. Accepted feedback say
 
 See [official API contract evidence](docs/openpath-contract-evidence.md) and [Android transport evidence and remaining checks](docs/android-transport-evidence.md). These distinguish documented facts, app policies, fixture results and unverified tenant/device behavior.
 
+## Sentry monitoring (before phase 6)
+
+The Sentry SDK, approved `mbeka02/latch-mobile` project, public local DSN, error privacy policy, navigation/API tracing and structured outcome logs are configured. Traces use 100% sampling in development and 10% in production. Request bodies/headers, employee details and arbitrary error/log context are excluded from JavaScript telemetry; replay and screenshot capture are off. Monitoring failures cannot repeat or change an unlock.
+
+**Real-app receipt and native/release verification remain pending.** No test issue has been claimed as received, and no emulator or app dev server was started. See [monitoring configuration, phone verification and production gates](docs/sentry-monitoring.md). Sentry source-map upload still needs a build-only auth token in the phase 6 build environment; it is never an APK/public environment variable.
+
 ## Implementation
 
 - **S1 — Authentication/session:** real Latch logic owns safe credential/MFA errors, expiry, restoration and account isolation. Screens subscribe to identity/status metadata and never receive tokens. Sign-out immediately clears the in-memory session and discovered selection, then removes the saved token.
@@ -211,7 +217,7 @@ Phase 5 continued primarily at S3, retaining real S1/S2 modules and selected S4 
 | S4 | Live build without the module selected mock data | Explicit composition fails closed without native transport |
 | S4 | Unknown-result gate prevented confirming local sign-out | Sign-out remains available while recovery history is retained |
 
-**Latest automated result:** 4 Jest suites, 134 tests passing; 10 native JVM transport tests passing; lint and typecheck passing. The JVM harness uses local HTTP/TLS fixtures; see its evidence note for dependencies and checks. Notification tests render actual Sonner. The live-mode Android production JavaScript/Hermes export passed, and Expo autolinking discovers the native module. Neither is an APK/native compilation check.
+**Phase 5 baseline:** 4 Jest suites, 134 tests passed, plus 10 native JVM transport tests. **After Sentry integration:** 7 Jest suites, 145 tests pass; lint and typecheck pass. Tests replace the external Sentry SDK and inspect the real outbound privacy callbacks; they do not send events. The JVM harness uses local HTTP/TLS fixtures; see its evidence note for dependencies and checks. Notification tests render actual Sonner. The live-mode Android production JavaScript/Hermes export also passed with Sentry source maps/debug IDs. Map upload was disabled. Neither the export nor autolinking is an APK/native compilation check.
 
 ## Evidence limits and next phases
 
