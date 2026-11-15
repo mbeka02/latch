@@ -18,6 +18,7 @@ export default function DoorScreen() {
   const { app, session, signOut } = useLatch();
   const [state, setState] = useState<DoorState>({ status: 'loading' });
   const [confirming, setConfirming] = useState(false);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState('');
   const mounted = useRef(true);
@@ -63,7 +64,7 @@ export default function DoorScreen() {
   }
 
   function confirmUnlock() {
-    if (state.status !== 'ready' || confirming || pending) return;
+    if (state.status !== 'ready' || confirming || confirmingSignOut || pending) return;
     setConfirming(true);
   }
 
@@ -82,7 +83,7 @@ export default function DoorScreen() {
           <ThemedText>{pending ? 'Request in progress' : 'Ready to request a simulated unlock'}</ThemedText>
           <ActionButton
             label={pending ? 'Requesting unlock…' : `Unlock ${state.door.name}`}
-            disabled={confirming || pending}
+            disabled={confirming || confirmingSignOut || pending}
             onPress={confirmUnlock}
           />
           {outcome ? <ThemedText selectable accessibilityLiveRegion="polite">{outcome}</ThemedText> : null}
@@ -104,7 +105,22 @@ export default function DoorScreen() {
         </>
       ) : null}
       <ThemedText selectable>{session?.email}</ThemedText>
-      <ActionButton label="Sign out" secondary disabled={confirming || pending} onPress={signOut} />
+      <ActionButton label="Sign out" secondary disabled={confirming || confirmingSignOut || pending}
+        onPress={() => setConfirmingSignOut(true)} />
+      <AppModal
+        visible={confirmingSignOut}
+        title="Sign out of Latch?"
+        onClose={() => setConfirmingSignOut(false)}
+        actions={<>
+          <ActionButton label="Sign out" disabled={!confirmingSignOut || pending} onPress={() => {
+            if (!confirmingSignOut || pending) return;
+            setConfirmingSignOut(false);
+            signOut();
+          }} />
+          <ActionButton label="Cancel" secondary onPress={() => setConfirmingSignOut(false)} />
+        </>}>
+        <ThemedText>You’ll need to sign in again to request door access.</ThemedText>
+      </AppModal>
     </AccessScreen>
   );
 }

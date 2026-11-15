@@ -135,9 +135,33 @@ test('the employee can sign in to the discovered demo door and sign out', async 
 
   await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
 
+  const modal = await screen.findByTestId('app-modal');
+  expect(within(modal).getByRole('header', { name: 'Sign out of Latch?' })).toBeOnTheScreen();
+  expect(within(modal).getByRole('button', { name: 'Cancel' })).toBeOnTheScreen();
+  expect(screen).toHavePathname('/door');
+  await fireEvent.press(within(modal).getByRole('button', { name: 'Sign out' }));
+
   await waitFor(() => expect(screen).toHavePathname('/'));
   expect(screen.getByRole('button', { name: 'Sign in' })).toBeOnTheScreen();
   expect(screen.queryByRole('button', { name: /unlock/i })).not.toBeOnTheScreen();
+});
+
+test('cancelling sign out keeps the employee signed in with door access', async () => {
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await screen.findByRole('button', { name: 'Unlock COE Door' });
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+
+  const modal = await screen.findByTestId('app-modal');
+  await fireEvent.press(within(modal).getByRole('button', { name: 'Cancel' }));
+
+  await waitFor(() => expect(screen.queryByTestId('app-modal')).not.toBeOnTheScreen());
+  expect(screen).toHavePathname('/door');
+  expect(screen.getByText('demo@latch.example')).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Unlock COE Door' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
 });
 
 test('an unlock failure shows a warning toast and preserves the uncertain result after dismissal', async () => {

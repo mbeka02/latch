@@ -19,7 +19,7 @@ For MFA, the first attempt reveals the code field. Re-enter the password with th
 
 The password starts hidden. Tap the eye icon to show or hide it; the entered value is preserved. The toggle is labelled **Show password** / **Hide password** for accessibility and is disabled during sign-in.
 
-Sign in to discover **COE Door (simulated)**. Tap **Unlock COE Door**, then choose **Cancel** or **Unlock** in the themed confirmation modal. Confirmation shows **Simulated unlock accepted. No physical door was operated.** Sign out returns to the sign-in screen.
+Sign in to discover **COE Door (simulated)**. Tap **Unlock COE Door**, then choose **Cancel** or **Unlock** in the themed confirmation modal. Confirmation shows **Simulated unlock accepted. No physical door was operated.** Tap **Sign out** to open a confirmation modal. Choose **Sign out** inside the modal to end the session, or **Cancel** to keep using the door screen.
 
 [Sonner Native](https://sonner-native.netlify.app/) relays sign-in errors, unavailable access, accepted unlock requests and unconfirmed results. Notifications match the system light/dark theme, disappear after five seconds, and can be tapped or swiped away. The full-width positioning wrapper keeps them horizontally centered; their card width is capped to the window's safe area and 480 dp. Error guidance and door outcomes remain on screen after dismissal. Signing in or out clears previous session notifications. Notifications never dispatch or retry an unlock.
 
@@ -98,7 +98,7 @@ Phase 2 continued at S1 and selected S4 journeys, one missing behaviour at a tim
 
 Additional journey checks exercise restart through the real SecureStore adapter with mocked native functions, verify passwords/codes are absent from its saved value, hold a provider check pending to verify the loading gate, and recover from a startup service outage without operating a door.
 
-**Latest automated result:** 2 suites, 42 tests passing; lint and typecheck passing. Notification tests render the actual Sonner component. Phase 2 adds SDK-compatible `expo-secure-store` and its config plugin. The Phase 2 Android production JavaScript/Hermes export passed; this checks Metro compilation, not APK packaging or native runtime behaviour.
+**Latest automated result:** 2 suites, 43 tests passing; lint and typecheck passing. Notification tests render the actual Sonner component. Phase 2 adds SDK-compatible `expo-secure-store` and its config plugin. The Phase 2 Android production JavaScript/Hermes export passed; this checks Metro compilation, not APK packaging or native runtime behaviour.
 
 ## Evidence limits and next phases
 
