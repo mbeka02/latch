@@ -12,6 +12,8 @@ Regenerate assets with `node scripts/generate-brand-assets.mjs` using Node 24+, 
 
 The launcher icon, app label and native splash require a new APK. Expo Go cannot verify their packaged appearance. Router tests cover startup dismissal, reduced-motion journeys and foregrounding; the native-to-React handoff, Android launcher masks and animation smoothness still need a preview/release APK check on a phone. See [Expo's splash guidance](https://docs.expo.dev/versions/v58.0.0/sdk/splash-screen/).
 
+Starter logos, badges, tab illustrations, animation components and the project-reset script have been removed. The generated `/_sitemap` route is disabled. Invalid links and caught screen errors use Latch guidance and recovery controls; raw error details are not displayed. Caught errors still pass through Sentry's privacy policy. The evaluator APK must be a standalone release build: Expo Go and development builds retain host/developer UI that is not part of Latch's release interface. Release packaging and device checks remain phase 6 work.
+
 ## Try the demo
 
 Install the locked dependencies with `npm ci`, then run `npm start` and open the project in a compatible Expo Go installation or Android emulator.
@@ -231,7 +233,7 @@ Phase 5 continued primarily at S3, retaining real S1/S2 modules and selected S4 
 
 ## Evidence limits and next phases
 
-Phase 5 used deterministic HTTP fixtures, local JVM HTTP/TLS fixtures and a terminating production export, without launching an emulator or app dev server. Device checks for recovery screens, actual process termination, native bridge registration, storage behavior and background timing remain manual. No APK build, live tenant test or physical unlock was performed. JavaScript journey tests do not establish native layout, keyboard, TalkBack or hardware behavior. App icons/splash assets remain starter assets pending the branding/delivery phase.
+Phase 5 used deterministic HTTP fixtures, local JVM HTTP/TLS fixtures and a terminating production export, without launching an emulator or app dev server. Device checks for recovery screens, actual process termination, native bridge registration, storage behavior and background timing remain manual. No APK build, live tenant test or physical unlock was performed. JavaScript journey tests do not establish native layout, keyboard, TalkBack or hardware behavior. Latch icons and splash assets now replace the starter branding; packaged appearance remains a device/release check.
 
 Phase 5 completes the tenant-free direct adapter and native transport implementation/evidence. Phase 6 is next: native APK compilation/inspection, device verification and IFSS handoff. The [transport evidence note](docs/android-transport-evidence.md#evidence-boundaries--phase-6) records the remaining build/device gates. Real account/namespace compatibility, exact provider error behavior, permission enforcement and revocation propagation remain IFSS acceptance checks. A sent request cannot be undone by local expiry or interruption.
 

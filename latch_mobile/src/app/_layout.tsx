@@ -13,6 +13,8 @@ import { AccessScreen } from '@/components/access-screen';
 import { ThemedText } from '@/components/themed-text';
 import { LaunchScreen } from '@/components/launch-screen';
 
+export { RouteError as ErrorBoundary } from '@/components/route-error';
+
 initializeMonitoring();
 
 type RootLayoutProps = { provider?: Openpath } & SessionOptions;

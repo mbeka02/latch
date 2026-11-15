@@ -5,7 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import type { ProviderSession } from '@/lib/openpath';
 import { AccessError } from '@/lib/access-error';
 
-import RootLayout from '@/app/_layout';
+import RootLayout, { ErrorBoundary } from '@/app/_layout';
 import HomeScreen from '@/app/index';
 import DoorScreen from '@/app/door';
 import { createMockOpenpath } from '@/services/mocks/openpath';
@@ -13,9 +13,35 @@ import { createLatch } from '@/services/latch';
 import { createOpenpath, type OpenpathRequest } from '@/services/openpath';
 import * as Sentry from '@sentry/react-native';
 import * as Reanimated from 'react-native-reanimated';
+import NotFoundScreen from '@/app/+not-found';
 
 beforeEach(() => {
   jest.spyOn(Reanimated, 'useReducedMotion').mockReturnValue(true);
+});
+
+test('an invalid app link shows Latch guidance and returns to sign-in without exposing route tools', async () => {
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen, '+not-found': NotFoundScreen }, { initialUrl: '/missing-door-link' });
+  expect(screen.getByRole('header', { name: 'This Latch screen is unavailable' })).toBeOnTheScreen();
+  expect(screen.queryByText('Unmatched Route')).not.toBeOnTheScreen();
+  expect(screen.queryByText('Sitemap')).not.toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Return to Latch' }));
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeOnTheScreen();
+});
+
+test('a screen failure shows safe Latch recovery instead of a framework error screen', async () => {
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+  let failed = true;
+  function InitialScreen() {
+    if (failed) throw new Error('fixture raw failure details');
+    return <HomeScreen />;
+  }
+  await renderRouter({ _layout: { default: RootLayout, ErrorBoundary }, index: InitialScreen, door: DoorScreen });
+  expect(screen.getByRole('header', { name: 'Latch could not display this screen' })).toBeOnTheScreen();
+  expect(screen.queryByText(/fixture raw failure details/)).not.toBeOnTheScreen();
+  expect(screen.queryByText('Sitemap')).not.toBeOnTheScreen();
+  failed = false;
+  await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeOnTheScreen();
 });
 
 test('cold launch shows the Latch branding, reveals sign-in, and does not replay on foreground', async () => {
