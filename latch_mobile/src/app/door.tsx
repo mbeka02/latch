@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { AccessScreen } from '@/components/access-screen';
 import { ActionButton } from '@/components/action-button';
@@ -8,6 +11,9 @@ import type { DoorChoice, OrganisationChoice } from '@/services/latch';
 import { useLatch } from '@/services/latch-context';
 import { AccessError, safeAccessError } from '@/lib/access-error';
 import { AppModal } from '@/components/app-modal';
+import { AccessLayout, Spacing } from '@/constants/theme';
+import { Brand } from '@/constants/branding';
+import { useTheme } from '@/hooks/use-theme';
 
 type DoorState =
   | { status: 'loading' }
@@ -17,6 +23,7 @@ type DoorState =
   | { status: 'unavailable'; message: string };
 
 export default function DoorScreen() {
+  const theme = useTheme();
   const { app, session, signOut, unlockState, coolingDown, environment } = useLatch();
   const simulated = environment === 'demo';
   const [state, setState] = useState<DoorState>({ status: 'loading' });
@@ -97,10 +104,29 @@ export default function DoorScreen() {
   }
 
   return (
-    <AccessScreen>
-      {state.status === 'loading' ? <ThemedText>Checking access…</ThemedText> : null}
+    <AccessScreen headerActions={
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Account"
+        accessibilityState={{ expanded: confirmingSignOut, disabled: confirming || confirmingSignOut || pending }}
+        disabled={confirming || confirmingSignOut || pending}
+        onPress={() => setConfirmingSignOut(true)}
+        style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: Spacing.three, borderRadius: 24,
+          borderWidth: 1, borderColor: theme.modalOutline, flexDirection: 'row', alignItems: 'center', gap: Spacing.two,
+          opacity: confirming || confirmingSignOut || pending ? 0.5 : pressed ? 0.7 : 1 })}>
+        <SymbolView name={{ ios: 'person', android: 'person', web: 'person' }} size={18} tintColor={theme.text} accessible={false} />
+        <ThemedText type="smallBold">Account</ThemedText>
+      </Pressable>
+    }>
+      {state.status === 'loading' ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four }}>
+        <ActivityIndicator color={theme.textSecondary} />
+        <ThemedText>Checking access…</ThemedText>
+      </View> : null}
       {state.status === 'unavailable' ? (
-        <ThemedText selectable accessibilityRole="alert">COE Door access is unavailable. {state.message}</ThemedText>
+        <View style={{ gap: Spacing.three, paddingVertical: Spacing.four }}>
+          <ThemedText type="subtitle" accessibilityRole="header">Access unavailable</ThemedText>
+          <ThemedText selectable accessibilityRole="alert">COE Door access is unavailable. {state.message}</ThemedText>
+        </View>
       ) : null}
       {state.status === 'organisations' ? <>
         <ThemedText type="subtitle" accessibilityRole="header">Choose an organisation</ThemedText>
@@ -115,18 +141,38 @@ export default function DoorScreen() {
       </> : null}
       {state.status === 'ready' ? (
         <>
-          <ThemedText type="subtitle" accessibilityRole="header">{state.door.name}{simulated ? ' (simulated)' : ''}</ThemedText>
-          <ThemedText selectable themeColor="textSecondary">
-            {state.door.organisation} · {state.door.site} · {state.door.zone}
-          </ThemedText>
-          <ThemedText>{pending ? 'Request in progress' : unlockState.requiresAcknowledgement ? 'Previous result needs acknowledgement'
-            : coolingDown ? 'Please wait before another request' : simulated ? 'Ready to request a simulated unlock' : 'Ready to request an unlock'}</ThemedText>
-          <ActionButton
-            label={pending ? 'Requesting unlock…' : `Unlock ${state.door.name}`}
-            disabled={confirming || confirmingSignOut || unlockBlocked}
-            onPress={confirmUnlock}
-          />
-          {state.choices.length > 1 ? <ActionButton label="Change door" secondary disabled={confirming || confirmingSignOut || pending}
+          <View style={{ gap: Spacing.two, paddingTop: Spacing.three }}>
+            <ThemedText themeColor="textSecondary" style={{ fontSize: 12, lineHeight: 18, letterSpacing: 2 }}>YOUR ACCESS</ThemedText>
+            <ThemedText accessibilityRole="header" style={{ fontSize: AccessLayout.titleSize, lineHeight: AccessLayout.titleLineHeight, fontWeight: '700', letterSpacing: -1 }}>
+              {state.door.name}{simulated ? ' (simulated)' : ''}
+            </ThemedText>
+            <ThemedText selectable themeColor="textSecondary">
+              {state.door.organisation} · {state.door.site} · {state.door.zone}
+            </ThemedText>
+          </View>
+          <View style={{ padding: Spacing.four, gap: Spacing.four, backgroundColor: theme.backgroundElement,
+            borderColor: theme.modalOutline, borderWidth: 1, borderRadius: 24 }}>
+            <View accessible={false} importantForAccessibility="no-hide-descendants" style={{ alignItems: 'center', paddingVertical: Spacing.three }}>
+              {/* Illustration only: it never represents the physical door position. */}
+              <Svg width={100} height={120} viewBox="0 0 100 120">
+                <Rect x={21} y={8} width={58} height={102} rx={3} fill="none" stroke={theme.text} strokeWidth={3} />
+                <Path d="M12 111H88" fill="none" stroke={theme.text} strokeWidth={3} strokeLinecap="round" />
+                <Path d="M61 61H70" fill="none" stroke={Brand.red} strokeWidth={3} strokeLinecap="round" />
+                <Circle cx={70} cy={61} r={3.5} fill={Brand.red} />
+              </Svg>
+            </View>
+            {pending ? <ActivityIndicator color={theme.action} /> : null}
+            <ThemedText style={{ textAlign: 'center' }} accessibilityLiveRegion="polite">
+              {pending ? 'Request in progress' : unlockState.requiresAcknowledgement ? 'Previous result needs acknowledgement'
+                : coolingDown ? 'Please wait before another request' : simulated ? 'Ready to request a simulated unlock' : 'Ready to request an unlock'}
+            </ThemedText>
+            <ActionButton
+              label={pending ? 'Requesting unlock…' : `Unlock ${state.door.name}`}
+              disabled={confirming || confirmingSignOut || unlockBlocked}
+              onPress={confirmUnlock}
+            />
+          </View>
+          {state.choices.length > 1 ? <ActionButton label="Change door" quiet disabled={confirming || confirmingSignOut || pending}
             onPress={() => { toast.dismiss(); setState({ status: 'doors', choices: state.choices }); }} /> : null}
           <AppModal
             visible={confirming}
@@ -145,7 +191,10 @@ export default function DoorScreen() {
           </AppModal>
         </>
       ) : null}
-      {showOutcome ? <ThemedText selectable accessibilityLiveRegion="polite">{outcome}</ThemedText> : null}
+      {showOutcome ? <View style={{ gap: Spacing.two, padding: Spacing.three, borderLeftWidth: 3, borderLeftColor: theme.inputOutline }}>
+        <ThemedText themeColor="textSecondary" type="small">Latest request</ThemedText>
+        <ThemedText selectable accessibilityLiveRegion="polite">{outcome}</ThemedText>
+      </View> : null}
       {unlockState.status === 'unknown' && unlockState.door ? <>
         <ThemedText selectable themeColor="textSecondary">
           Previous request: {unlockState.door.name} · {unlockState.door.organisation} · {unlockState.door.site} · {unlockState.door.zone}
@@ -164,20 +213,17 @@ export default function DoorScreen() {
             }} />
         </> : <ThemedText>Acknowledgement saved. A new request still needs confirmation.</ThemedText>}
       </> : null}
-      {state.status === 'ready' || state.status === 'unavailable' ? <ActionButton label="Refresh access" secondary
+      {state.status === 'ready' || state.status === 'unavailable' ? <ActionButton label="Refresh access" quiet={state.status === 'ready'} secondary
         disabled={confirming || confirmingSignOut || pending} onPress={() => {
           setState({ status: 'loading' }); toast.dismiss(); setRefresh((value) => value + 1);
         }} /> : null}
-      {organisations.length > 1 && state.status !== 'organisations' ? <ActionButton label="Change organisation" secondary
+      {organisations.length > 1 && state.status !== 'organisations' ? <ActionButton label="Change organisation" quiet
         disabled={confirming || confirmingSignOut || pending || state.status === 'loading'} onPress={() => {
           toast.dismiss(); setState({ status: 'loading' }); setOrganisationKey(undefined); setRefresh((value) => value + 1);
         }} /> : null}
-      <ThemedText selectable>{session?.email}</ThemedText>
-      <ActionButton label="Sign out" secondary disabled={confirming || confirmingSignOut || pending}
-        onPress={() => setConfirmingSignOut(true)} />
       <AppModal
         visible={confirmingSignOut}
-        title="Sign out of Latch?"
+        title="Your account"
         onClose={() => setConfirmingSignOut(false)}
         actions={<>
           <ActionButton label="Sign out" disabled={!confirmingSignOut || pending} onPress={() => {
@@ -187,6 +233,8 @@ export default function DoorScreen() {
           }} />
           <ActionButton label="Cancel" secondary onPress={() => setConfirmingSignOut(false)} />
         </>}>
+        <ThemedText themeColor="textSecondary" type="small">Signed in as</ThemedText>
+        <ThemedText selectable style={{ fontSize: 18, lineHeight: 26 }}>{session?.email}</ThemedText>
         <ThemedText>You’ll need to sign in again to request door access.</ThemedText>
       </AppModal>
     </AccessScreen>

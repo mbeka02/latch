@@ -140,7 +140,7 @@ test('an unresolved unlock does not prevent local sign-out through its confirmat
   await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Unlock' }));
   await screen.findByRole('button', { name: 'Acknowledge result' });
-  await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
   await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Sign out' }));
   expect(await screen.findByRole('button', { name: 'Sign in' })).toBeOnTheScreen();
 });
@@ -262,14 +262,15 @@ test('the employee can sign in to the discovered demo door and sign out', async 
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
 
   expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
-  expect(screen.getByText('demo@latch.example')).toBeOnTheScreen();
+  expect(screen.queryByText('demo@latch.example')).not.toBeOnTheScreen();
   expect(screen.getByText('Demo mode — simulated access')).toBeOnTheScreen();
   expect(screen).toHavePathname('/door');
 
-  await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
 
   const modal = await screen.findByTestId('app-modal');
-  expect(within(modal).getByRole('header', { name: 'Sign out of Latch?' })).toBeOnTheScreen();
+  expect(within(modal).getByRole('header', { name: 'Your account' })).toBeOnTheScreen();
+  expect(within(modal).getByText('demo@latch.example')).toBeOnTheScreen();
   expect(within(modal).getByRole('button', { name: 'Cancel' })).toBeOnTheScreen();
   expect(screen).toHavePathname('/door');
   await fireEvent.press(within(modal).getByRole('button', { name: 'Sign out' }));
@@ -280,21 +281,25 @@ test('the employee can sign in to the discovered demo door and sign out', async 
 });
 
 test('cancelling sign out keeps the employee signed in with door access', async () => {
-  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  const provider = createMockOpenpath();
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
   await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
   await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await screen.findByRole('button', { name: 'Unlock COE Door' });
-  await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
 
   const modal = await screen.findByTestId('app-modal');
   await fireEvent.press(within(modal).getByRole('button', { name: 'Cancel' }));
 
   await waitFor(() => expect(screen.queryByTestId('app-modal')).not.toBeOnTheScreen());
   expect(screen).toHavePathname('/door');
-  expect(screen.getByText('demo@latch.example')).toBeOnTheScreen();
+  expect(screen.queryByText('demo@latch.example')).not.toBeOnTheScreen();
   expect(screen.getByRole('button', { name: 'Unlock COE Door' })).toBeEnabled();
-  expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Account' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeOnTheScreen();
+  expect(provider.getUnlockRequests()).toEqual([]);
 });
 
 test('the employee selects an organisation and a distinguishable COE door before confirming unlock', async () => {
@@ -339,7 +344,7 @@ test('missing-key demo access explains the problem and refreshes without request
   await fireEvent.press(screen.getByRole('button', { name: 'Refresh access' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(/Exactly one currently valid Cloud Key is required\./);
   expect(provider.getUnlockRequests()).toEqual([]);
-  await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
   await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Sign out' }));
   await waitFor(() => expect(screen).toHavePathname('/'));
 });
@@ -573,7 +578,8 @@ test('the employee can complete demo MFA after correcting an invalid authenticat
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
 
   expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
-  expect(screen.getByText('mfa@latch.example')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
+  expect(within(await screen.findByTestId('app-modal')).getByText('mfa@latch.example')).toBeOnTheScreen();
 });
 
 test('returning to an expired session replaces the door screen with sign-in guidance', async () => {
@@ -644,7 +650,8 @@ test('a restart waits for a current provider check before restoring secure nativ
   await act(async () => { finishCheck(await base.checkSession('simulated-session:mfa@latch.example')); });
 
   expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
-  expect(screen.getByText('mfa@latch.example')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
+  expect(within(await screen.findByTestId('app-modal')).getByText('mfa@latch.example')).toBeOnTheScreen();
   expect(base.getUnlockRequests()).toEqual([]);
 });
 
