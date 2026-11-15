@@ -1,5 +1,7 @@
 import { createLatch } from '@/services/latch';
 import { createMockOpenpath } from '@/services/mocks/openpath';
+import type { Entry, ProviderSession, UserContext } from '@/lib/openpath';
+import { AccessError } from '@/lib/access-error';
 
 test('a demo employee can sign in and read their identity without exposing the provider token', async () => {
   const { auth } = createLatch(createMockOpenpath());
@@ -20,6 +22,311 @@ test('signing out clears the employee session', async () => {
   auth.signOut();
 
   expect(auth.getSession()).toBeNull();
+});
+
+test('a rejected replacement sign-in leaves no usable employee session', async () => {
+  const { auth } = createLatch(createMockOpenpath());
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  await expect(auth.signIn({ email: 'demo@latch.example', password: 'wrong' })).rejects.toThrow();
+
+  expect(auth.getSession()).toBeNull();
+});
+
+test('an MFA account requires a code without creating an authenticated session', async () => {
+  const { auth } = createLatch(createMockOpenpath());
+
+  await expect(auth.signIn({ email: 'mfa@latch.example', password: 'latch-demo-only' }))
+    .rejects.toMatchObject({ code: 'mfa-required' });
+
+  expect(auth.getSession()).toBeNull();
+});
+
+test('an MFA employee can recover from an invalid code using a valid demo code', async () => {
+  const { auth } = createLatch(createMockOpenpath());
+  const input = { email: 'mfa@latch.example', password: 'latch-demo-only' };
+  await expect(auth.signIn({ ...input, totpCode: '000000' })).rejects.toMatchObject({ code: 'mfa-invalid' });
+  expect(auth.getSession()).toBeNull();
+
+  await auth.signIn({ ...input, totpCode: '123456' });
+
+  expect(auth.getSession()?.email).toBe('mfa@latch.example');
+});
+
+test('SSO-only demo authentication is explicitly unsupported', async () => {
+  const { auth } = createLatch(createMockOpenpath());
+  await expect(auth.signIn({ email: 'sso@latch.example', password: 'latch-demo-only' }))
+    .rejects.toMatchObject({ code: 'unsupported-auth' });
+  expect(auth.getSession()).toBeNull();
+});
+
+test('provider failures give safe unavailable feedback without retaining an identity', async () => {
+  const provider = { ...createMockOpenpath(), async login() { throw new Error('Sensitive provider response'); } };
+  const { auth } = createLatch(provider);
+  await expect(auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' }))
+    .rejects.toMatchObject({ code: 'unavailable', message: 'The service is unavailable. Try again when your connection is restored.' });
+  expect(auth.getSession()).toBeNull();
+});
+
+test('the local fifteen-minute cap expires the session and prevents a previously discovered unlock', async () => {
+  let time = 1_800_000;
+  const provider = createMockOpenpath();
+  const { auth, doors } = createLatch(provider, { now: () => time });
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const [door] = await doors.discoverDoors();
+  time = 2_700_000;
+
+  await expect(doors.requestUnlock(door.key)).rejects.toMatchObject({ code: 'expired' });
+  expect(auth.getSession()).toBeNull();
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('an earlier upstream expiry takes precedence over the local cap', async () => {
+  let time = 1_800_000;
+  const base = createMockOpenpath();
+  const provider = { ...base, async login(input: Parameters<typeof base.login>[0]) {
+    return { ...await base.login(input), expiresAt: 1_860_000 };
+  } };
+  const { auth } = createLatch(provider, { now: () => time });
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  time = 1_860_000;
+
+  expect(auth.getSession()).toBeNull();
+});
+
+test('restart restores a stored session through a current provider check without resetting its local cap', async () => {
+  let time = 1_800_000;
+  const storage = memoryStorage();
+  const first = createLatch(createMockOpenpath(), { storage, now: () => time });
+  await first.auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  time = 2_640_000;
+  const restarted = createLatch(createMockOpenpath(), { storage, now: () => time });
+
+  await restarted.auth.restore();
+
+  expect(restarted.auth.getSession()?.email).toBe('demo@latch.example');
+  time = 2_700_000;
+  expect(restarted.auth.getSession()).toBeNull();
+});
+
+test('a secure-storage write failure leaves authentication unusable with safe recovery feedback', async () => {
+  const storage = { ...memoryStorage(), async write() { throw new Error('Native storage details'); } };
+  const { auth } = createLatch(createMockOpenpath(), { storage });
+  await expect(auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' }))
+    .rejects.toMatchObject({ code: 'storage' });
+  expect(auth.getSession()).toBeNull();
+});
+
+test('a failed secure-store read prevents restoration and exposes safe recovery feedback', async () => {
+  const storage = { ...memoryStorage(), async read(): Promise<string | null> { throw new Error('Native key details'); } };
+  const { auth } = createLatch(createMockOpenpath(), { storage });
+  await expect(auth.restore()).rejects.toMatchObject({ code: 'storage' });
+  expect(auth.getSession()).toBeNull();
+});
+
+test('local sign-out removes the saved session so a restart cannot restore it', async () => {
+  const storage = memoryStorage();
+  const first = createLatch(createMockOpenpath(), { storage });
+  await first.auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  await first.auth.signOut();
+  const restarted = createLatch(createMockOpenpath(), { storage });
+
+  expect(await restarted.auth.restore()).toBeNull();
+});
+
+test('an incomplete stored record is discarded without attempting a session grant', async () => {
+  const storage = memoryStorage();
+  await storage.write('{"version":1}');
+  const { auth } = createLatch(createMockOpenpath(), { storage });
+
+  await expect(auth.restore()).rejects.toMatchObject({ code: 'storage' });
+  expect(auth.getSession()).toBeNull();
+  expect(await storage.read()).toBeNull();
+});
+
+test('restoration rejects a different identity returned for the stored token', async () => {
+  const storage = memoryStorage();
+  const base = createMockOpenpath();
+  await createLatch(base, { storage }).auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const provider = { ...base, async checkSession(token: string) {
+    const result = await base.checkSession(token);
+    return { ...result, user: { ...result.user, identityId: 'a-different-employee' } };
+  } };
+  const { auth } = createLatch(provider, { storage });
+
+  await expect(auth.restore()).rejects.toMatchObject({ code: 'expired' });
+  expect(auth.getSession()).toBeNull();
+  expect(await storage.read()).toBeNull();
+});
+
+test('a restoration outage blocks access but permits a later deliberate session check', async () => {
+  const storage = memoryStorage();
+  const base = createMockOpenpath();
+  await createLatch(base, { storage }).auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  let offline = true;
+  const provider = { ...base, async checkSession(token: string) {
+    if (offline) throw new Error('Raw network response');
+    return base.checkSession(token);
+  } };
+  const { auth, doors } = createLatch(provider, { storage });
+
+  await expect(auth.restore()).rejects.toMatchObject({ code: 'unavailable' });
+  expect(auth.getSession()).toBeNull();
+  await expect(doors.discoverDoors()).rejects.toThrow();
+  offline = false;
+  await auth.restore();
+  expect(auth.getSession()?.email).toBe('demo@latch.example');
+});
+
+test('a late sign-in response cannot authenticate after local sign-out', async () => {
+  const base = createMockOpenpath();
+  const response = deferred<ProviderSession>();
+  const started = deferred<void>();
+  const provider = { ...base, async login() { started.resolve(); return response.promise; } };
+  const { auth } = createLatch(provider);
+  const pending = auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' }).catch((error) => error);
+  await started.promise;
+  await auth.signOut();
+  response.resolve(await base.login({ email: 'demo@latch.example', password: 'latch-demo-only' }));
+
+  expect(await pending).toMatchObject({ code: 'stale-operation' });
+  expect(auth.getSession()).toBeNull();
+});
+
+test('sign-out stays durable when an earlier native session write finishes late', async () => {
+  const backing = memoryStorage();
+  const started = deferred<void>();
+  const release = deferred<void>();
+  const storage = { ...backing, async write(value: string) {
+    started.resolve();
+    await release.promise;
+    await backing.write(value);
+  } };
+  const { auth } = createLatch(createMockOpenpath(), { storage });
+  const pending = auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' }).catch((error) => error);
+  await started.promise;
+  const logout = auth.signOut();
+  expect(auth.getSession()).toBeNull();
+  release.resolve();
+  await logout;
+  expect(await pending).toMatchObject({ code: 'stale-operation' });
+
+  expect(await createLatch(createMockOpenpath(), { storage }).auth.restore()).toBeNull();
+});
+
+test('a late restoration check cannot replace a newly signed-in account', async () => {
+  const storage = memoryStorage();
+  const base = createMockOpenpath();
+  await createLatch(base, { storage }).auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const response = deferred<ProviderSession>();
+  const started = deferred<void>();
+  const provider = { ...base, async checkSession() { started.resolve(); return response.promise; } };
+  const { auth } = createLatch(provider, { storage });
+  const pending = auth.restore().catch((error) => error);
+  await started.promise;
+  expect(auth.getSession()).toBeNull();
+  await auth.signIn({ email: 'mfa@latch.example', password: 'latch-demo-only', totpCode: '123456' });
+  response.resolve(await base.checkSession('simulated-session:demo@latch.example'));
+
+  expect(await pending).toMatchObject({ code: 'stale-operation' });
+  expect(auth.getSession()?.email).toBe('mfa@latch.example');
+});
+
+test('late door discovery from the previous account cannot replace the current account selection', async () => {
+  const base = createMockOpenpath();
+  const response = deferred<Entry[]>();
+  const started = deferred<void>();
+  const provider = { ...base, async listUserEntries(context: UserContext) {
+    if (context.token === 'simulated-session:demo@latch.example') { started.resolve(); return response.promise; }
+    return base.listUserEntries(context);
+  } };
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const previous = doors.discoverDoors().catch((error) => error);
+  await started.promise;
+  await auth.signIn({ email: 'mfa@latch.example', password: 'latch-demo-only', totpCode: '123456' });
+  const [current] = await doors.discoverDoors();
+  response.resolve([{ id: 303, name: 'COE Door', site: 'Old site', zone: 'Old zone' }]);
+
+  expect(await previous).toMatchObject({ code: 'stale-operation' });
+  expect(await doors.requestUnlock(current.key)).toMatchObject({ status: 'accepted' });
+  expect(base.getUnlockRequests()).toEqual([
+    { orgId: 101, userId: 203, entryId: 303, credentialId: 505 },
+  ]);
+});
+
+test('expired saved sessions are removed instead of being renewed on restart', async () => {
+  let time = 1_800_000;
+  const storage = memoryStorage();
+  await createLatch(createMockOpenpath(), { storage, now: () => time }).auth.signIn({
+    email: 'demo@latch.example', password: 'latch-demo-only',
+  });
+  time = 2_700_000;
+  const { auth } = createLatch(createMockOpenpath(), { storage, now: () => time });
+
+  await expect(auth.restore()).rejects.toMatchObject({ code: 'expired' });
+  expect(auth.getSession()).toBeNull();
+  expect(await storage.read()).toBeNull();
+});
+
+test('definitive token rejection during discovery clears both the active and saved session', async () => {
+  const storage = memoryStorage();
+  const provider = { ...createMockOpenpath(), async listUserEntries(): Promise<Entry[]> { throw new AccessError('expired'); } };
+  const { auth, doors } = createLatch(provider, { storage });
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'expired' });
+
+  expect(auth.getSession()).toBeNull();
+  expect(await storage.read()).toBeNull();
+});
+
+test('retrying after a failed logout deletion clears storage instead of restoring the old account', async () => {
+  const backing = memoryStorage();
+  let failing = false;
+  const storage = { ...backing, async clear() {
+    if (failing) throw new Error('Native deletion failed');
+    await backing.clear();
+  } };
+  const { auth } = createLatch(createMockOpenpath(), { storage });
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  failing = true;
+  await expect(auth.signOut()).rejects.toMatchObject({ code: 'storage' });
+  expect(auth.getSession()).toBeNull();
+  failing = false;
+
+  expect(await auth.restore()).toBeNull();
+  expect(await storage.read()).toBeNull();
+});
+
+test('a malformed upstream expiry cannot create an indefinitely usable session', async () => {
+  const base = createMockOpenpath();
+  const provider = { ...base, async login(input: Parameters<typeof base.login>[0]) {
+    return { ...await base.login(input), expiresAt: Number.NaN };
+  } };
+  const { auth } = createLatch(provider);
+
+  await expect(auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' }))
+    .rejects.toMatchObject({ code: 'unavailable' });
+  expect(auth.getSession()).toBeNull();
+});
+
+test('a failed native deletion does not resurrect the signed-out token in a fresh app instance', async () => {
+  const backing = memoryStorage();
+  let failing = false;
+  const storage = { ...backing, async clear() {
+    if (failing) throw new Error('Deletion unavailable');
+    await backing.clear();
+  } };
+  const first = createLatch(createMockOpenpath(), { storage });
+  await first.auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  failing = true;
+  await expect(first.auth.signOut()).rejects.toMatchObject({ code: 'storage' });
+  const restarted = createLatch(createMockOpenpath(), { storage });
+
+  await expect(restarted.auth.restore()).rejects.toMatchObject({ code: 'storage' });
+  expect(restarted.auth.getSession()).toBeNull();
 });
 
 test('an explicit unlock uses the discovered entry and the employee\'s existing Cloud Key', async () => {
@@ -52,3 +359,18 @@ test('the employee discovers COE from their provider data and existing Cloud Key
     zone: 'Engineering',
   }]);
 });
+
+function memoryStorage() {
+  let value: string | null = null;
+  return {
+    async read() { return value; },
+    async write(next: string) { value = next; },
+    async clear() { value = null; },
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}

@@ -1,4 +1,5 @@
-import type { Credential, Entry, Openpath, SignInInput, UserContext } from '@/lib/openpath';
+import type { Credential, Entry, Openpath, ProviderSession, SignInInput, UserContext } from '@/lib/openpath';
+import { AccessError } from '@/lib/access-error';
 
 type UnlockRecord = { orgId: number; userId: number; entryId: number; credentialId: number };
 export interface MockOpenpath extends Openpath {
@@ -11,28 +12,48 @@ export function createMockOpenpath(fixtures: { entries?: Entry[]; credentials?: 
   ];
   const credentials = fixtures.credentials ?? [{ id: 404, kind: 'cloud-key' as const }];
   const unlocks: UnlockRecord[] = [];
+  function sessionFor(email: string): ProviderSession {
+    return {
+      token: `simulated-session:${email}`,
+      expiresAt: null,
+      user: { identityId: email === 'demo@latch.example' ? 'demo-employee' : email, name: 'Demo employee', email },
+      memberships: [{ orgId: 101, userId: email === 'mfa@latch.example' ? 203 : 202, organisation: 'IFSS demo' }],
+    };
+  }
   function checkContext(context: UserContext) {
-    if (context.token !== 'simulated-session-not-a-real-alta-token' ||
-        context.membership.orgId !== 101 || context.membership.userId !== 202) {
+    const email = context.token.replace('simulated-session:', '');
+    if (!['demo@latch.example', 'mfa@latch.example'].includes(email) ||
+        context.token !== `simulated-session:${email}` || context.membership.orgId !== 101 ||
+        context.membership.userId !== sessionFor(email).memberships[0].userId) {
       throw new Error('Demo access denied.');
     }
+  }
+  function credentialsFor(context: UserContext): Credential[] {
+    return context.membership.userId === 203 && !fixtures.credentials
+      ? [{ id: 505, kind: 'cloud-key' }]
+      : credentials;
   }
 
   return {
     environment: 'demo',
     async login(input: SignInInput) {
-      if (input.email !== 'demo@latch.example' || input.password !== 'latch-demo-only') {
-        throw new Error('Use the demo account shown on the sign-in screen.');
+      if (input.email === 'sso@latch.example') throw new AccessError('unsupported-auth');
+      if (input.email === 'offline@latch.example') throw new AccessError('unavailable');
+      if (input.email === 'mfa@latch.example' && input.password === 'latch-demo-only') {
+        if (!input.totpCode) throw new AccessError('mfa-required');
+        if (input.totpCode !== '123456') throw new AccessError('mfa-invalid');
       }
-      return {
-        token: 'simulated-session-not-a-real-alta-token',
-        user: {
-          identityId: 'demo-employee',
-          name: 'Demo employee',
-          email: 'demo@latch.example',
-        },
-        memberships: [{ orgId: 101, userId: 202, organisation: 'IFSS demo' }],
-      };
+      if (!['demo@latch.example', 'mfa@latch.example'].includes(input.email) || input.password !== 'latch-demo-only') {
+        throw new AccessError('invalid-credentials');
+      }
+      return sessionFor(input.email);
+    },
+    async checkSession(token) {
+      const email = token.replace('simulated-session:', '');
+      if (!['demo@latch.example', 'mfa@latch.example'].includes(email) || token !== `simulated-session:${email}`) {
+        throw new AccessError('expired');
+      }
+      return sessionFor(email);
     },
     async listUserEntries(context) {
       checkContext(context);
@@ -40,12 +61,12 @@ export function createMockOpenpath(fixtures: { entries?: Entry[]; credentials?: 
     },
     async listCredentials(context) {
       checkContext(context);
-      return credentials.map((credential) => ({ ...credential }));
+      return credentialsFor(context).map((credential) => ({ ...credential }));
     },
     async unlockEntry({ context, entryId, credentialId }) {
       checkContext(context);
       if (!entries.some((entry) => entry.id === entryId) ||
-          !credentials.some((credential) => credential.id === credentialId && credential.kind === 'cloud-key')) {
+          !credentialsFor(context).some((credential) => credential.id === credentialId && credential.kind === 'cloud-key')) {
         throw new Error('Demo unlock denied.');
       }
       unlocks.push({

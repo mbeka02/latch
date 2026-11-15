@@ -1,4 +1,4 @@
-export type SignInInput = { email: string; password: string };
+export type SignInInput = { email: string; password: string; totpCode?: string };
 
 export type UserSession = { identityId: string; name: string; email: string };
 
@@ -11,6 +11,7 @@ export type UnlockCommand = { context: UserContext; entryId: number; credentialI
 
 export type ProviderSession = {
   token: string;
+  expiresAt: number | null;
   user: UserSession;
   memberships: Membership[];
 };
@@ -18,6 +19,8 @@ export type ProviderSession = {
 export interface Openpath {
   readonly environment: 'demo' | 'live';
   login(input: SignInInput): Promise<ProviderSession>;
+  // A current authorized identity read, not a locally decoded token or a refresh.
+  checkSession(token: string): Promise<ProviderSession>;
   listUserEntries(context: UserContext): Promise<Entry[]>;
   listCredentials(context: UserContext): Promise<Credential[]>;
   unlockEntry(command: UnlockCommand): Promise<void>;
