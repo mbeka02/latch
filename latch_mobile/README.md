@@ -14,6 +14,8 @@ The launcher icon, app label and native splash require a new APK. Expo Go cannot
 
 Starter logos, badges, tab illustrations, animation components and the project-reset script have been removed. The generated `/_sitemap` route is disabled. Invalid links and caught screen errors use Latch guidance and recovery controls; raw error details are not displayed. Caught errors still pass through Sentry's privacy policy. The evaluator APK must be a standalone release build: Expo Go and development builds retain host/developer UI that is not part of Latch's release interface. Release packaging and device checks remain phase 6 work.
 
+Access screens hide the navigation title bars and apply explicit safe-area padding. The sign-in title lives in the form, beneath the Latch wordmark. Demo credentials and MFA examples appear below the form only in demo mode; live mode shows a concise Alta prompt and the SSO limitation. A local architectural line pattern references IFSS's building imagery. Its slow, decorative movement runs only on the focused sign-in screen while the app is active; reduced motion keeps it static. Both themes share the form spacing, control radius and brand palette. See [the design notes and verification limits](docs/design/sign-in-review.md).
+
 ## Try the demo
 
 Install the locked dependencies with `npm ci`, then run `npm start` and open the project in a compatible Expo Go installation or Android emulator.
