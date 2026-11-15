@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { TextInput } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import { Pressable, TextInput, View } from 'react-native';
 
 import { AccessScreen } from '@/components/access-screen';
 import { ActionButton } from '@/components/action-button';
@@ -13,6 +14,7 @@ export default function HomeScreen() {
   const { signIn } = useLatch();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const inputStyle = {
@@ -32,6 +34,7 @@ export default function HomeScreen() {
     setError('');
     const input = { email, password };
     setPassword('');
+    setPasswordVisible(false);
     try {
       await signIn(input);
     } catch {
@@ -60,17 +63,50 @@ export default function HomeScreen() {
         style={inputStyle}
       />
       <ThemedText>Password</ThemedText>
-      <TextInput
-        accessibilityLabel="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="off"
-        editable={!busy}
-        style={inputStyle}
-      />
+      <View>
+        <TextInput
+          accessibilityLabel="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!passwordVisible}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="off"
+          editable={!busy}
+          style={[inputStyle, { paddingRight: Spacing.six }]}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+          accessibilityState={{ disabled: busy, selected: passwordVisible }}
+          disabled={busy}
+          onPress={() => setPasswordVisible((visible) => !visible)}
+          android_ripple={{ color: theme.backgroundSelected }}
+          style={({ pressed }) => ({
+            position: 'absolute',
+            top: Spacing.one,
+            bottom: Spacing.one,
+            right: Spacing.one,
+            width: 48,
+            minHeight: 48,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: Spacing.two,
+            opacity: busy ? 0.5 : pressed ? 0.7 : 1,
+          })}>
+          <SymbolView
+            name={{
+              ios: passwordVisible ? 'eye.slash' : 'eye',
+              android: passwordVisible ? 'visibility_off' : 'visibility',
+              web: passwordVisible ? 'visibility_off' : 'visibility',
+            }}
+            size={24}
+            tintColor={theme.textSecondary}
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          />
+        </Pressable>
+      </View>
       {error ? <ThemedText accessibilityRole="alert">{error}</ThemedText> : null}
       <ActionButton
         label={busy ? 'Signing in…' : 'Sign in'}

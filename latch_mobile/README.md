@@ -11,6 +11,8 @@ Use these fictional credentials, also displayed on the sign-in screen:
 - Email: `demo@latch.example`
 - Password: `latch-demo-only`
 
+The password starts hidden. Tap the eye icon to show or hide it; the entered value is preserved. The toggle is labelled **Show password** / **Hide password** for accessibility and is disabled during sign-in.
+
 Sign in to discover **COE Door (simulated)**. Tap **Unlock COE Door**, then choose **Cancel** or **Unlock** in the native confirmation. Confirmation shows **Simulated unlock accepted. No physical door was operated.** Sign out returns to the sign-in screen.
 
 Do not enter real employee credentials. Only the documented dummy account is accepted. The current composition always selects the in-process mock adapter; there is no live adapter, environment toggle or network fallback.
@@ -49,8 +51,9 @@ Phase 0 established the runner by observing the missing demo-label failure, then
 | S4 | Email field absent | User signs in to the discovered door and signs out through the protected stack |
 | S4 | No native confirmation opened | Cancel leaves the provider request history empty |
 | S4 | Confirmation had no Unlock action | Confirm dispatches one simulated command and displays truthful acceptance |
+| S4 | No Show password control | Eye toggle shows/hides the password while preserving its value |
 
-**Latest automated result:** 2 suites, 8 tests passing; lint and typecheck passing. No dependencies were added in phase 1.
+**Latest automated result:** 2 suites, 9 tests passing; lint and typecheck passing. No dependencies were added in phase 1 or for the password toggle.
 
 ## Evidence limits and next phases
 

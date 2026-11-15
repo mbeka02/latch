@@ -19,6 +19,21 @@ test('demo launch identifies simulated access and offers sign-in without an unlo
   expect(screen.queryByRole('button', { name: /unlock/i })).not.toBeOnTheScreen();
 });
 
+test('the employee can show and hide their password without changing its value', async () => {
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+
+  expect(screen.getByLabelText('Password')).toHaveProp('secureTextEntry', true);
+  await fireEvent.press(screen.getByRole('button', { name: 'Show password' }));
+
+  expect(screen.getByLabelText('Password')).toHaveProp('secureTextEntry', false);
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Hide password' }));
+
+  expect(screen.getByLabelText('Password')).toHaveProp('secureTextEntry', true);
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('latch-demo-only');
+});
+
 test('cancelling the native confirmation leaves the simulated door unrequested', async () => {
   const provider = createMockOpenpath();
   const nativeAlert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
