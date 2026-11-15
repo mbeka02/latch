@@ -2,6 +2,8 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Sentry from '@sentry/react-native';
+import { initializeMonitoring } from '@/monitoring/init';
 
 import { Notifications } from '@/components/notifications';
 import type { Openpath } from '@/lib/openpath';
@@ -10,7 +12,10 @@ import type { SessionOptions } from '@/services/latch';
 import { AccessScreen } from '@/components/access-screen';
 import { ThemedText } from '@/components/themed-text';
 
-export default function RootLayout({ provider, storage, attemptStorage, now }: { provider?: Openpath } & SessionOptions = {}) {
+initializeMonitoring();
+
+type RootLayoutProps = { provider?: Openpath } & SessionOptions;
+function RootLayout({ provider, storage, attemptStorage, now }: RootLayoutProps = {}) {
   const colorScheme = useColorScheme();
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -22,6 +27,11 @@ export default function RootLayout({ provider, storage, attemptStorage, now }: {
       </ThemeProvider>
     </GestureHandlerRootView>
   );
+}
+
+const MonitoredLayout = Sentry.wrap<RootLayoutProps>(RootLayout, { touchEventBoundaryProps: { extractTextFromChildren: false } });
+export default function Layout(props: RootLayoutProps = {}) {
+  return <MonitoredLayout {...props} />;
 }
 
 function SessionStack() {

@@ -33,7 +33,18 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "mbeka02",
+          "project": "latch-mobile",
+          "experimental_android": {
+            "enableAndroidGradlePlugin": false
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
