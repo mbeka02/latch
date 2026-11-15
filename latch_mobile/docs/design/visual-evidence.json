@@ -1,6 +1,6 @@
 {
   "schemaVersion": "uizze.visual-evidence.v1",
-  "scope": "Latch access-screen refinement; target 1016x1548 px, reported Android viewport 360x780 dp",
+  "scope": "Latch typography and identity refinement: Space Grotesk, standalone mark, Building access, sign-in-only backdrop; user screenshot is baseline, initial concept superseded for these details",
   "platform": "android",
   "comparison": "target",
   "target": {
@@ -11,15 +11,15 @@
   "sources": [
     {
       "path": "../../src/app/index.tsx",
-      "sha256": "e893e54038dd5ce361754bd9ae2b3f6cb16c09b43436cfa84910f37af7e8c0bc"
+      "sha256": "4e56f3a058e29cac9af05e9449e31ffada75d9d411d2364aba03be834cc713d9"
     },
     {
       "path": "../../src/app/_layout.tsx",
-      "sha256": "a42cd1e0c4cd75aaf6e058f829c738a7708052ac64f85881c02a22bff2a88162"
+      "sha256": "4311763c0f500b6f5cc814fb9b51d122f0f04b7989968b9cb5083f486a389cc1"
     },
     {
       "path": "../../src/components/access-screen.tsx",
-      "sha256": "1dc48745365ba4c051631e861af5ed90fafe4cb6b1f96b3eaa3475b2a3a8bdad"
+      "sha256": "8aaf926cf4038913c779dd9e402f5ba2153923fc3a5d96829eed613682164390"
     },
     {
       "path": "../../src/components/access-backdrop.tsx",
@@ -31,15 +31,39 @@
     },
     {
       "path": "../../src/components/themed-text.tsx",
-      "sha256": "ae907d2b52a6a231963db7882acb5f853e6a08b94c34efc88d89fb1cd5f83264"
+      "sha256": "722c40eca01dff314760beeb2f77b2af3e276be3cfa5535fb44347b0d8e5bc6a"
     },
     {
       "path": "../../src/constants/theme.ts",
-      "sha256": "9b8231db5d6ad48c7ed0264b62b0bd79d509681e9e7cb0840e6cae0658c3f22a"
+      "sha256": "23d467559d8af9de809f2dfb0afaa27dc0099c69d8f30f3c5c683cb618be42d0"
     },
     {
       "path": "../../src/constants/branding.ts",
       "sha256": "7117e10cd64ef48fb95addcf6a5b9c41a427301887bdd1232ddb2a5d6c6ac0aa"
+    },
+    {
+      "path": "../../src/constants/fonts.ts",
+      "sha256": "efc91363602446b3de2178bf1924497b65de39760b394cd336b3e6a54f628f0c"
+    },
+    {
+      "path": "../../src/components/notifications.tsx",
+      "sha256": "a375155c702764f394aa5b6185558a43eb89dc3d7bda9590b8a8f3efaf86e267"
+    },
+    {
+      "path": "../../src/components/launch-screen.tsx",
+      "sha256": "375d39ca47595164bc28f5c86529d264c4bdcf1f76011f6fe3b0d5d190cf1544"
+    },
+    {
+      "path": "../../assets/fonts/SpaceGrotesk-Regular.ttf",
+      "sha256": "5ede28c4425f3fe4830c8f4754b39e9a87a93d0c3baa5e0a9924532aaa8a98bd"
+    },
+    {
+      "path": "../../assets/fonts/SpaceGrotesk-Medium.ttf",
+      "sha256": "3183b7eb0b4241476360e2cd8e527868616cc16d3ce332c4376505989b772b44"
+    },
+    {
+      "path": "../../assets/fonts/SpaceGrotesk-Bold.ttf",
+      "sha256": "7209bbb75fc0f5c546a5f5773b0db74ffc6abf04c2148c1105cace5765a96bdb"
     }
   ],
   "requiredChecks": [
@@ -61,7 +85,7 @@
       "id": "native-themes",
       "kind": "visual",
       "state": "Demo and live sign-in; signed-in door; light/dark; 360x780 dp",
-      "observed": "Blocked pending phone inspection. Generated target only; no native runtime capture.",
+      "observed": "Pending phone inspection of the revised typography and layout. Previous user screenshot reviewed; no new native runtime capture or emulator run.",
       "status": "blocked",
       "environment": {
         "kind": "physical-device",
@@ -75,7 +99,7 @@
       "id": "native-keyboard-text",
       "kind": "interaction",
       "state": "Keyboard open and large system text",
-      "observed": "Blocked pending native keyboard and large-text inspection. Router tests do not measure Yoga geometry.",
+      "observed": "Pending phone inspection of the revised typography and layout. Previous user screenshot reviewed; no new native runtime capture or emulator run.",
       "steps": [
         "Focus Email and Password, toggle visibility and open MFA.",
         "Increase system text size; scroll to all actions.",
@@ -94,7 +118,7 @@
       "id": "ambient-motion",
       "kind": "motion",
       "state": "Focused sign-in, background/foreground and reduced motion",
-      "observed": "Blocked pending native recording and smoothness check. No emulator was launched.",
+      "observed": "Pending phone inspection of the revised typography and layout. Previous user screenshot reviewed; no new native runtime capture or emulator run.",
       "steps": [
         "Observe the slow background drift; ensure fields stay still.",
         "Background and foreground the app.",
