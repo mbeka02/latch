@@ -3,6 +3,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { toast } from 'sonner-native';
 import * as SecureStore from 'expo-secure-store';
 import type { ProviderSession } from '@/lib/openpath';
+import { AccessError } from '@/lib/access-error';
 
 import RootLayout from '@/app/_layout';
 import HomeScreen from '@/app/index';
@@ -164,6 +165,98 @@ test('cancelling sign out keeps the employee signed in with door access', async 
   expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
 });
 
+test('the employee selects an organisation and a distinguishable COE door before confirming unlock', async () => {
+  const provider = createMockOpenpath();
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'multi@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+
+  expect(await screen.findByRole('header', { name: 'Choose an organisation' })).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: /unlock/i })).not.toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Engineering demo' }));
+  expect(await screen.findByRole('header', { name: 'Choose COE Door' })).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'COE Door · South building · COE' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Unlock COE Door' }));
+  const modal = await screen.findByTestId('app-modal');
+  expect(within(modal).getByText('Engineering demo · South building · COE')).toBeOnTheScreen();
+  expect(provider.getUnlockRequests()).toEqual([]);
+  await fireEvent.press(within(modal).getByRole('button', { name: 'Unlock' }));
+  expect(await screen.findByText('Simulated unlock accepted')).toBeOnTheScreen();
+  expect(provider.getUnlockRequests()).toEqual([{ orgId: 606, userId: 707, entryId: 809, credentialId: 404 }]);
+  await fireEvent.press(screen.getByRole('button', { name: 'Change organisation' }));
+  expect(await screen.findByRole('header', { name: 'Choose an organisation' })).toBeOnTheScreen();
+  expect(screen.queryByText('Simulated unlock accepted. No physical door was operated.')).not.toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'IFSS demo' }));
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+  expect(screen.getByText('IFSS demo · Demo building · COE')).toBeOnTheScreen();
+  expect(provider.getUnlockRequests()).toHaveLength(1);
+});
+
+test('missing-key demo access explains the problem and refreshes without requesting an unlock', async () => {
+  const provider = createMockOpenpath();
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'no-key@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Exactly one currently valid Cloud Key is required\./);
+  expect(screen.queryByRole('button', { name: /unlock/i })).not.toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh access' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Exactly one currently valid Cloud Key is required\./);
+  expect(provider.getUnlockRequests()).toEqual([]);
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Sign out' }));
+  await waitFor(() => expect(screen).toHavePathname('/'));
+});
+
+test('refresh recovers from denied discovery without automatically requesting an unlock', async () => {
+  const base = createMockOpenpath();
+  let denied = true;
+  const provider = { ...base, async listUserEntries(context: Parameters<typeof base.listUserEntries>[0]) {
+    if (denied) throw new AccessError('access-denied');
+    return base.listUserEntries(context);
+  } };
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Door access is unavailable for this account\./);
+  denied = false;
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh access' }));
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+  expect(screen.queryByRole('alert')).not.toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toEqual([]);
+});
+
+test('a removed entry requires refreshed access and a fresh confirmation without dispatching', async () => {
+  const base = createMockOpenpath();
+  let removed = false;
+  const provider = { ...base, async listUserEntries(context: Parameters<typeof base.listUserEntries>[0]) {
+    return removed ? [] : base.listUserEntries(context);
+  } };
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  removed = true;
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Unlock' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Door access has changed/);
+  expect(screen.queryByText("We couldn't confirm the result. Check before trying again.")).not.toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toEqual([]);
+  removed = false;
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh access' }));
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toEqual([]);
+});
+
 test('an unlock failure shows a warning toast and preserves the uncertain result after dismissal', async () => {
   const provider = {
     ...createMockOpenpath(),
@@ -195,7 +288,7 @@ test('unavailable door access shows an error toast while unlock remains unavaila
 
   await fireEvent.press(await screen.findByRole('button', { name: /COE access unavailable/ }));
 
-  expect(screen.getByRole('alert')).toHaveTextContent('COE Door access is unavailable.');
+  expect(screen.getByRole('alert')).toHaveTextContent(/COE Door access is unavailable\./);
   expect(screen.queryByRole('button', { name: /unlock/i })).not.toBeOnTheScreen();
   expect(provider.getUnlockRequests()).toEqual([]);
 });

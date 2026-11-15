@@ -63,7 +63,8 @@ export default function HomeScreen() {
       <ThemedText>Use a demo account. No physical door will be operated.</ThemedText>
       <ThemedText selectable themeColor="textSecondary">
         Email: demo@latch.example{'\n'}Password: latch-demo-only{'\n'}
-        MFA demo: mfa@latch.example · Code: 123456
+        MFA demo: mfa@latch.example · Code: 123456{'\n'}
+        Organisation and door choices: multi@latch.example
       </ThemedText>
       <ThemedText>Email</ThemedText>
       <TextInput
