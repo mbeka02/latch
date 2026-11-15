@@ -332,7 +332,7 @@ test('a failed native deletion does not resurrect the signed-out token in a fres
 test('an explicit unlock uses the discovered entry and the employee\'s existing Cloud Key', async () => {
   const provider = createMockOpenpath({
     entries: [{ id: 9876, name: 'COE Door', site: 'Assessment site', zone: 'Engineering' }],
-    credentials: [{ id: 8765, kind: 'cloud-key' }],
+    credentials: [{ id: 8765, kind: 'cloud-key', validFrom: null, validUntil: null }],
   });
   const { auth, doors } = createLatch(provider);
   await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
@@ -347,7 +347,7 @@ test('an explicit unlock uses the discovered entry and the employee\'s existing 
 test('the employee discovers COE from their provider data and existing Cloud Key', async () => {
   const { auth, doors } = createLatch(createMockOpenpath({
     entries: [{ id: 9876, name: 'COE Door', site: 'Assessment site', zone: 'Engineering' }],
-    credentials: [{ id: 8765, kind: 'cloud-key' }],
+    credentials: [{ id: 8765, kind: 'cloud-key', validFrom: null, validUntil: null }],
   }));
   await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
 
@@ -358,6 +358,251 @@ test('the employee discovers COE from their provider data and existing Cloud Key
     site: 'Assessment site',
     zone: 'Engineering',
   }]);
+});
+
+test('an unrelated entry never becomes a COE choice or an unlock target', async () => {
+  const provider = createMockOpenpath({ entries: [{ id: 999, name: 'Reception', site: 'Demo', zone: 'Lobby' }] });
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'entry-not-found' });
+  await expect(doors.requestUnlock('choice-1')).rejects.toThrow();
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('an employee chooses their organisation instead of silently using the first membership', async () => {
+  const base = createMockOpenpath();
+  const provider = { ...base, async login(input: Parameters<typeof base.login>[0]) {
+    return { ...await base.login(input), memberships: [
+      { orgId: 101, userId: 202, organisation: 'IFSS demo' },
+      { orgId: 606, userId: 707, organisation: 'Engineering demo' },
+    ] };
+  }, async listUserEntries(context: UserContext) {
+    return [{ id: 808, name: 'COE Door', site: context.membership.organisation, zone: 'Lab' }];
+  }, async listCredentials() { return { items: [{ id: 909, kind: 'cloud-key' as const, validFrom: null, validUntil: null }], nextOffset: null }; },
+  async unlockEntry(command: Parameters<typeof base.unlockEntry>[0]) {
+    expect(command.context.membership).toEqual({ orgId: 606, userId: 707, organisation: 'Engineering demo' });
+  } };
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'organisation-required' });
+  const organisations = doors.discoverOrganisations();
+  expect(organisations.map(({ name }) => name)).toEqual(['IFSS demo', 'Engineering demo']);
+  const [door] = await doors.discoverDoors(organisations[1].key);
+  expect(door.organisation).toBe('Engineering demo');
+  expect(await doors.requestUnlock(door.key)).toMatchObject({ status: 'accepted' });
+});
+
+test('distinct COE matches require an explicit choice with their original site and zone context', async () => {
+  const provider = createMockOpenpath({ entries: [
+    { id: 11, name: ' coe DOOR ', site: 'North building', zone: 'Lab' },
+    { id: 12, name: 'COE Door', site: 'South building', zone: 'Lab' },
+    { id: 13, name: 'COE Door annex', site: 'East building', zone: 'Lab' },
+  ] });
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  const choices = await doors.discoverDoors();
+  expect(choices.map(({ name, site, zone }) => ({ name, site, zone }))).toEqual([
+    { name: ' coe DOOR ', site: 'North building', zone: 'Lab' },
+    { name: 'COE Door', site: 'South building', zone: 'Lab' },
+  ]);
+  expect(provider.getUnlockRequests()).toEqual([]);
+  await doors.requestUnlock(choices[1].key);
+  expect(provider.getUnlockRequests()).toEqual([{ orgId: 101, userId: 202, entryId: 12, credentialId: 404 }]);
+});
+
+test.each([
+  [{ id: 11, name: 'COE Door', site: 'Building', zone: 'Lab' }, { id: 12, name: 'COE Door', site: ' building ', zone: 'LAB' }],
+  [{ id: 11, name: 'COE Door', site: '', zone: '' }, { id: 12, name: 'COE Door', site: '', zone: '' }],
+])('indistinguishable COE entries cannot become ready choices: %j', async (...entries) => {
+  const provider = createMockOpenpath({ entries });
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'ambiguous-entry' });
+  await expect(doors.requestUnlock('choice-1')).rejects.toThrow();
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('an expired Cloud Key cannot enable discovery', async () => {
+  const provider = createMockOpenpath({ credentials: [{ id: 404, kind: 'cloud-key', validFrom: null, validUntil: 1_800_000 }] });
+  const { auth, doors } = createLatch(provider, { now: () => 1_800_000 });
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'credential-unavailable' });
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('discovery reads the later credential page before deciding which Cloud Key is usable', async () => {
+  const base = createMockOpenpath();
+  const provider = { ...base, async listCredentials(_context: UserContext, offset = 0) {
+    return offset === 0
+      ? { items: [{ id: 404, kind: 'cloud-key' as const, validFrom: null, validUntil: 1_800_000 }], nextOffset: 1 }
+      : { items: [{ id: 505, kind: 'cloud-key' as const, validFrom: null, validUntil: null }], nextOffset: null };
+  }, async unlockEntry(command: Parameters<typeof base.unlockEntry>[0]) {
+    expect(command.credentialId).toBe(505);
+  } };
+  const { auth, doors } = createLatch(provider, { now: () => 1_800_000 });
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  const [door] = await doors.discoverDoors();
+  expect(await doors.requestUnlock(door.key)).toMatchObject({ status: 'accepted' });
+});
+
+test('an entry removed after discovery cannot dispatch an unlock from its earlier choice', async () => {
+  const base = createMockOpenpath();
+  let removed = false;
+  const provider = { ...base, async listUserEntries(context: UserContext) {
+    return removed ? [] : base.listUserEntries(context);
+  } };
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const [door] = await doors.discoverDoors();
+  removed = true;
+
+  await expect(doors.requestUnlock(door.key)).rejects.toMatchObject({ code: 'access-changed' });
+  expect(base.getUnlockRequests()).toEqual([]);
+});
+
+test('an older discovery cannot publish choices after a newer organisation discovery', async () => {
+  const base = createMockOpenpath();
+  const response = deferred<Entry[]>();
+  const started = deferred<void>();
+  let slow = true;
+  const provider = { ...base, async listUserEntries(context: UserContext) {
+    if (slow) { slow = false; started.resolve(); return response.promise; }
+    return base.listUserEntries(context);
+  } };
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const old = doors.discoverDoors().catch((error) => error);
+  await started.promise;
+  const [current] = await doors.discoverDoors();
+  response.resolve([{ id: 999, name: 'COE Door', site: 'Obsolete building', zone: 'COE' }]);
+
+  expect(await old).toMatchObject({ code: 'access-changed' });
+  expect(await doors.requestUnlock(current.key)).toMatchObject({ status: 'accepted' });
+});
+
+test.each([
+  [],
+  [{ id: 10, kind: 'mobile' as const, validFrom: null, validUntil: null }],
+  [{ id: 10, kind: 'cloud-key' as const, validFrom: 1_800_001, validUntil: null }],
+  [{ id: 10, kind: 'cloud-key' as const, validFrom: null, validUntil: Number.NaN }],
+  [{ id: 10, kind: 'cloud-key' as const, validFrom: null, validUntil: null },
+    { id: 11, kind: 'cloud-key' as const, validFrom: null, validUntil: null }],
+])('missing, inactive or ambiguous Cloud Keys never enable a door: %j', async (...credentials) => {
+  const provider = createMockOpenpath({ credentials });
+  const { auth, doors } = createLatch(provider, { now: () => 1_800_000 });
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'credential-unavailable' });
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('a denied credential page prevents partial discovery from granting access', async () => {
+  const base = createMockOpenpath();
+  const provider = { ...base, async listCredentials(_context: UserContext, offset: number) {
+    if (offset > 0) throw new AccessError('access-denied');
+    return { items: [{ id: 404, kind: 'cloud-key' as const, validFrom: null, validUntil: null }], nextOffset: 1 };
+  } };
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'access-denied' });
+  expect(base.getUnlockRequests()).toEqual([]);
+});
+
+test('reopening organisation selection invalidates the previous door choice', async () => {
+  const provider = createMockOpenpath();
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const [door] = await doors.discoverDoors();
+  doors.discoverOrganisations();
+  await expect(doors.requestUnlock(door.key)).rejects.toMatchObject({ code: 'access-changed' });
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('organisation associations with indistinguishable names require IFSS clarification', async () => {
+  const base = createMockOpenpath();
+  const provider = { ...base, async login(input: Parameters<typeof base.login>[0]) {
+    return { ...await base.login(input), memberships: [
+      { orgId: 101, userId: 202, organisation: 'IFSS demo' },
+      { orgId: 606, userId: 707, organisation: ' ifss DEMO ' },
+    ] };
+  } };
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  expect(() => doors.discoverOrganisations()).toThrow('Organisation names are missing or ambiguous. Ask IFSS to clarify your memberships.');
+  await expect(doors.discoverDoors('org-1-1')).rejects.toMatchObject({ code: 'organisation-unavailable' });
+});
+
+test.each([
+  ['missing@latch.example', 'entry-not-found'],
+  ['ambiguous@latch.example', 'ambiguous-entry'],
+  ['denied@latch.example', 'access-denied'],
+])('the %s demo authenticates but cannot grant unavailable door access', async (email, code) => {
+  const provider = createMockOpenpath();
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email, password: 'latch-demo-only' });
+
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code });
+  expect(auth.getSession()?.email).toBe(email);
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('a Cloud Key that expires after discovery is not dispatched or silently replaced', async () => {
+  let time = 1_800_000;
+  const provider = createMockOpenpath({ credentials: [
+    { id: 404, kind: 'cloud-key', validFrom: null, validUntil: 1_800_100 },
+    { id: 505, kind: 'cloud-key', validFrom: 1_800_100, validUntil: null },
+  ] });
+  const { auth, doors } = createLatch(provider, { now: () => time });
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const [door] = await doors.discoverDoors();
+  time = 1_800_100;
+
+  await expect(doors.requestUnlock(door.key)).rejects.toMatchObject({ code: 'access-changed' });
+  expect(provider.getUnlockRequests()).toEqual([]);
+  const [refreshed] = await doors.discoverDoors();
+  await doors.requestUnlock(refreshed.key);
+  expect(provider.getUnlockRequests()).toEqual([{ orgId: 101, userId: 202, entryId: 303, credentialId: 505 }]);
+});
+
+test('a valid key on the first page does not hide an ambiguous key on a later page', async () => {
+  const provider = createMockOpenpath({ credentials: [
+    { id: 404, kind: 'cloud-key', validFrom: null, validUntil: null },
+    { id: 500, kind: 'mobile', validFrom: null, validUntil: null },
+    { id: 505, kind: 'cloud-key', validFrom: null, validUntil: null },
+  ] });
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'credential-unavailable' });
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('non-advancing credential pagination fails safely instead of enabling partial access', async () => {
+  const base = createMockOpenpath();
+  const provider = { ...base, async listCredentials() {
+    return { items: [{ id: 404, kind: 'cloud-key' as const, validFrom: null, validUntil: null }], nextOffset: 0 };
+  } };
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'unavailable' });
+  expect(base.getUnlockRequests()).toEqual([]);
+});
+
+test('organisation and door references from a previous account cannot be reused', async () => {
+  const provider = createMockOpenpath();
+  const { auth, doors } = createLatch(provider);
+  await auth.signIn({ email: 'multi@latch.example', password: 'latch-demo-only' });
+  const [, organisation] = doors.discoverOrganisations();
+  const [door] = await doors.discoverDoors(organisation.key);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+
+  await expect(doors.discoverDoors(organisation.key)).rejects.toMatchObject({ code: 'organisation-required' });
+  await expect(doors.requestUnlock(door.key)).rejects.toMatchObject({ code: 'access-changed' });
+  expect(provider.getUnlockRequests()).toEqual([]);
 });
 
 function memoryStorage() {

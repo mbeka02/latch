@@ -1,4 +1,4 @@
-import type { Openpath, ProviderSession, SignInInput, UserContext, UserSession } from '@/lib/openpath';
+import type { Credential, Entry, Openpath, ProviderSession, SignInInput, UserContext, UserSession } from '@/lib/openpath';
 import { AccessError, safeAccessError, type AccessErrorCode } from '@/lib/access-error';
 import type { SessionStorage } from '@/lib/session-storage';
 
@@ -30,8 +30,11 @@ export type DoorChoice = {
   zone: string;
 };
 
+export type OrganisationChoice = { key: string; name: string };
+
 export interface DoorAccessService {
-  discoverDoors(): Promise<DoorChoice[]>;
+  discoverOrganisations(): OrganisationChoice[];
+  discoverDoors(organisationKey?: string): Promise<DoorChoice[]>;
   requestUnlock(choiceKey: string): Promise<{ status: 'accepted'; simulated: boolean }>;
 }
 
@@ -39,8 +42,9 @@ export function createLatch(provider: Openpath, { now = Date.now, storage }: Ses
   let session: ProviderSession | null = null;
   let expiresAt = 0;
   let startedAt = 0;
-  let selection: { key: string; context: UserContext; entryId: number; credentialId: number } | null = null;
+  let selections: { key: string; context: UserContext; entry: Entry; credentialId: number }[] = [];
   let sequence = 0;
+  let discovery = 0;
   let generation = 0;
   let storageQueue: Promise<unknown> = Promise.resolve();
   let storageNeedsClear = false;
@@ -62,7 +66,7 @@ export function createLatch(provider: Openpath, { now = Date.now, storage }: Ses
     if (session && (now() >= expiresAt || now() < startedAt)) {
       const operation = ++generation;
       session = null;
-      selection = null;
+      selections = [];
       publish('signed-out', 'expired');
       if (storage) void stored(() => storage.clear()).catch(() => {
         if (operation === generation) publish('signed-out', 'storage');
@@ -82,7 +86,7 @@ export function createLatch(provider: Openpath, { now = Date.now, storage }: Ses
       if (failure.code === 'expired') {
         const invalidated = ++generation;
         session = null;
-        selection = null;
+        selections = [];
         publish('signed-out', 'expired');
         try { if (storage) await stored(() => storage.clear()); }
         catch {
@@ -92,11 +96,34 @@ export function createLatch(provider: Openpath, { now = Date.now, storage }: Ses
       throw failure;
     }
   }
+  async function readCredentials(context: UserContext, operation: number) {
+    const credentials: Credential[] = [];
+    let offset = 0;
+    for (let page = 0; page < 100; page++) {
+      const result = await upstream(operation, () => provider.listCredentials(context, offset));
+      credentials.push(...result.items);
+      if (result.nextOffset === null) return credentials;
+      if (!Number.isSafeInteger(result.nextOffset) || result.nextOffset <= offset) throw new AccessError('unavailable');
+      offset = result.nextOffset;
+    }
+    throw new AccessError('unavailable');
+  }
+  function usableKeys(credentials: Credential[]) {
+    const time = now();
+    return credentials.filter((credential) => credential.kind === 'cloud-key' &&
+      (credential.validFrom === null || (Number.isFinite(credential.validFrom) && credential.validFrom <= time)) &&
+      (credential.validUntil === null || (Number.isFinite(credential.validUntil) && time < credential.validUntil)));
+  }
+  function checkOrganisations() {
+    if (!session) throw new AccessError('expired');
+    const names = session.memberships.map(({ organisation }) => organisation.trim().toLowerCase());
+    if (names.some((name) => !name) || new Set(names).size !== names.length) throw new AccessError('organisation-unavailable');
+  }
   return {
     auth: {
       async signIn(input) {
         const operation = ++generation;
-        selection = null;
+        selections = [];
         session = null;
         publish('signing-in');
         try {
@@ -127,7 +154,7 @@ export function createLatch(provider: Openpath, { now = Date.now, storage }: Ses
       async restore() {
         const operation = ++generation;
         session = null;
-        selection = null;
+        selections = [];
         publish('restoring');
         try {
           if (storageNeedsClear && storage) {
@@ -181,7 +208,7 @@ export function createLatch(provider: Openpath, { now = Date.now, storage }: Ses
       async signOut() {
         const operation = ++generation;
         session = null;
-        selection = null;
+        selections = [];
         publish('signed-out');
         try { if (storage) await stored(() => storage.clear()); }
         catch (error) {
@@ -200,48 +227,74 @@ export function createLatch(provider: Openpath, { now = Date.now, storage }: Ses
       subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     },
     doors: {
+      discoverOrganisations() {
+        currentSession();
+        discovery++;
+        selections = [];
+        if (!session) throw new AccessError('expired');
+        checkOrganisations();
+        return session.memberships.map((membership, index) => ({
+          key: `org-${generation}-${index}`, name: membership.organisation,
+        }));
+      },
       async requestUnlock(choiceKey) {
         currentSession();
-        if (!session || !selection || selection.key !== choiceKey || selection.context.token !== session.token) {
-          throw new Error('Refresh door access before requesting an unlock.');
+        const selection = selections.find((choice) => choice.key === choiceKey);
+        if (!session || !selection || selection.context.token !== session.token) {
+          throw new AccessError('access-changed');
         }
         const chosen = selection;
-        await upstream(generation, () => provider.unlockEntry({
+        const operation = generation;
+        const [entries, credentials] = await upstream(operation, () => Promise.all([
+          provider.listUserEntries(chosen.context), readCredentials(chosen.context, operation),
+        ]));
+        currentSession();
+        const keys = usableKeys(credentials);
+        const entry = entries.find((item) => item.id === chosen.entry.id);
+        if (!selections.includes(chosen) || !entry || entry.name !== chosen.entry.name ||
+            entry.site !== chosen.entry.site || entry.zone !== chosen.entry.zone ||
+            keys.length !== 1 || keys[0].id !== chosen.credentialId) {
+          if (selections.includes(chosen)) selections = [];
+          throw new AccessError('access-changed');
+        }
+        await upstream(operation, () => provider.unlockEntry({
           context: chosen.context,
-          entryId: chosen.entryId,
+          entryId: chosen.entry.id,
           credentialId: chosen.credentialId,
         }));
         return { status: 'accepted', simulated: provider.environment === 'demo' };
       },
-      async discoverDoors() {
+      async discoverDoors(organisationKey) {
         currentSession();
         const operation = generation;
-        selection = null;
-        if (!session || session.memberships.length !== 1) {
-          throw new Error('Sign in with a single demo organisation to discover COE Door.');
-        }
-        const context = { token: session.token, membership: session.memberships[0] };
+        const revision = ++discovery;
+        selections = [];
+        if (!session) throw new AccessError('expired');
+        checkOrganisations();
+        const membership = organisationKey === undefined && session.memberships.length === 1
+          ? session.memberships[0]
+          : session.memberships.find((_, index) => organisationKey === `org-${generation}-${index}`);
+        if (!membership) throw new AccessError('organisation-required');
+        const context = { token: session.token, membership };
         const [entries, credentials] = await upstream(operation, () => Promise.all([
           provider.listUserEntries(context),
-          provider.listCredentials(context),
+          readCredentials(context, operation),
         ]));
         assertCurrent(operation);
         currentSession();
+        if (revision !== discovery) throw new AccessError('access-changed');
         const matches = entries.filter((entry) => entry.name.trim().toLowerCase() === 'coe door');
-        const keys = credentials.filter((credential) => credential.kind === 'cloud-key');
-        if (matches.length !== 1 || keys.length !== 1) {
-          throw new Error('COE Door access is unavailable for this account.');
-        }
-        const entry = matches[0];
-        const key = `choice-${++sequence}`;
-        selection = { key, context, entryId: entry.id, credentialId: keys[0].id };
-        return [{
-          key,
-          name: entry.name,
-          organisation: context.membership.organisation,
-          site: entry.site,
-          zone: entry.zone,
-        }];
+        const keys = usableKeys(credentials);
+        if (!matches.length) throw new AccessError('entry-not-found');
+        const contexts = matches.map((entry) => JSON.stringify([entry.site.trim().toLowerCase(), entry.zone.trim().toLowerCase()]));
+        if (new Set(contexts).size !== matches.length) throw new AccessError('ambiguous-entry');
+        if (keys.length !== 1) throw new AccessError('credential-unavailable');
+        return matches.map((entry) => {
+          const key = `choice-${++sequence}`;
+          selections.push({ key, context, entry: { ...entry }, credentialId: keys[0].id });
+          return { key, name: entry.name, organisation: context.membership.organisation,
+            site: entry.site, zone: entry.zone };
+        });
       },
     },
   };

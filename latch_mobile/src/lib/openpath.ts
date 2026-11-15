@@ -5,7 +5,9 @@ export type UserSession = { identityId: string; name: string; email: string };
 export type Membership = { orgId: number; userId: number; organisation: string };
 
 export type Entry = { id: number; name: string; site: string; zone: string };
-export type Credential = { id: number; kind: 'cloud-key' | 'mobile' };
+// Normalized validity bounds are epoch milliseconds; null means unbounded.
+export type Credential = { id: number; kind: 'cloud-key' | 'mobile'; validFrom: number | null; validUntil: number | null };
+export type CredentialPage = { items: Credential[]; nextOffset: number | null };
 export type UserContext = { token: string; membership: Membership };
 export type UnlockCommand = { context: UserContext; entryId: number; credentialId: number };
 
@@ -22,6 +24,6 @@ export interface Openpath {
   // A current authorized identity read, not a locally decoded token or a refresh.
   checkSession(token: string): Promise<ProviderSession>;
   listUserEntries(context: UserContext): Promise<Entry[]>;
-  listCredentials(context: UserContext): Promise<Credential[]>;
+  listCredentials(context: UserContext, offset: number): Promise<CredentialPage>;
   unlockEntry(command: UnlockCommand): Promise<void>;
 }
