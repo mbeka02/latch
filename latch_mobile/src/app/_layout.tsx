@@ -1,18 +1,31 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
+import { Stack } from 'expo-router/stack';
 import { useColorScheme } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import type { Openpath } from '@/lib/openpath';
+import { LatchProvider, useLatch } from '@/services/latch-context';
 
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
+export default function RootLayout({ provider }: { provider?: Openpath } = {}) {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
+      <LatchProvider provider={provider}>
+        <SessionStack />
+      </LatchProvider>
     </ThemeProvider>
+  );
+}
+
+function SessionStack() {
+  const { session } = useLatch();
+  return (
+    <Stack>
+      <Stack.Protected guard={!session}>
+        <Stack.Screen name="index" options={{ title: 'Sign in to Latch' }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!!session}>
+        <Stack.Screen name="door" options={{ title: 'Door access' }} />
+      </Stack.Protected>
+    </Stack>
   );
 }

@@ -1,14 +1,32 @@
 # Latch
 
-Android-first Expo / React Native app for the IFSS assessment. The intended live architecture calls Openpath directly with the evaluator's own Alta identity; this phase makes no Alta requests.
+Android-first Expo / React Native app for the IFSS assessment. **Phase 1 is a simulated demonstration only.** It makes no Alta requests, operates no physical door and needs no backend.
 
-## Phase 0 — test harness and launch shell
+## Try the demo
 
-The agreed S4 journey test renders the real Router layout and routes. It checks that launch shows **Demo mode — simulated access**, presents **Sign in**, and offers no unlock action.
+Install the locked dependencies with `npm ci`, then run `npm start` and open the project in a compatible Expo Go installation or Android emulator.
 
-The sign-in button is disabled until the mock authentication journey is implemented in phase 1. The starter tabs, Explore screen and splash remain; this is not a finished login screen or APK.
+Use these fictional credentials, also displayed on the sign-in screen:
 
-### Checks
+- Email: `demo@latch.example`
+- Password: `latch-demo-only`
+
+Sign in to discover **COE Door (simulated)**. Tap **Unlock COE Door**, then choose **Cancel** or **Unlock** in the native confirmation. Confirmation shows **Simulated unlock accepted. No physical door was operated.** Sign out returns to the sign-in screen.
+
+Do not enter real employee credentials. Only the documented dummy account is accepted. The current composition always selects the in-process mock adapter; there is no live adapter, environment toggle or network fallback.
+
+## Implementation
+
+- **S1 — Authentication/session:** real Latch logic holds the simulated provider session in memory and exposes identity metadata to screens. Sign-out clears that session and its discovered selection.
+- **S2 — Door access:** real Latch logic resolves the returned organisation, entry and existing Cloud Key. Screens receive a selection reference and readable context rather than tokens or provider IDs.
+- **S3 — Openpath adapter:** typed provider operations have an in-process adapter with fictional account/door data. These normalized types are not a claim that the native Openpath JSON protocol is implemented.
+- **S4 — User journey:** the actual Router screens use those modules. A protected stack replaces the starter Home/Explore tabs. The demo label stays visible on sign-in and door screens.
+
+All organisation/entry/credential IDs are confined to provider data. Tests change entry/credential IDs to verify that the Latch rules use discovery rather than app configuration. The mock adapter's request history records simulated commands for tests and contains no provider token.
+
+The current controls use React Native's accessible fields/actions and native Alert confirmation. Device-specific rendering and dialog behaviour still need Android verification; Jest substitutes the native Alert interface rather than displaying an operating-system dialog.
+
+## Checks and TDD evidence
 
 From this directory:
 
@@ -18,20 +36,26 @@ npm run lint
 npm run typecheck
 ```
 
-`npm test` runs once without watch mode, using the Android `jest-expo` preset and React Native Testing Library. Tests live outside `src/app/`. Only native/runtime and asset support is substituted; the test uses the actual Latch screen and layout.
+`npm test` runs once using the Android `jest-expo` preset. Tests stay outside `src/app/`, use the real Latch modules, and replace only the external provider/native interfaces. No snapshots or live tenant operations are involved.
 
-Tested harness: Jest 30.5.2, jest-expo 58.0.14, React Native Testing Library 14.1.0, on Node 24.21.0. The lockfile records resolved dependencies.
+Phase 0 established the runner by observing the missing demo-label failure, then passing the minimal launch test. Phase 1 added each behaviour through a separate red → green cycle:
 
-### TDD evidence
+| Seam | Observed red | Green behaviour |
+| --- | --- | --- |
+| S1 | Sign-in not implemented | Dummy identity can sign in and read identity metadata without its token |
+| S2 | Discovery returned no choices | COE and existing Cloud Key resolve from returned data with changed IDs |
+| S2 | Unlock not implemented | An explicit request uses the discovered entry and credential |
+| S1 | Session remained after sign-out | Sign-out clears the public session |
+| S4 | Email field absent | User signs in to the discovered door and signs out through the protected stack |
+| S4 | No native confirmation opened | Cancel leaves the provider request history empty |
+| S4 | Confirmation had no Unlock action | Confirm dispatches one simulated command and displays truthful acceptance |
 
-- **Red:** after resolving test-environment setup, the routed starter rendered and the test failed because it could not find **Demo mode — simulated access**.
-- **Green:** the minimal launch shell passed the same behaviour test: one suite, one test, no snapshots.
-- **Baseline repairs:** corrected the starter web tab's Pressable ref type; replaced its effect-driven theme hydration with a hydration-safe external-store subscription. Lint and typecheck pass without disabling their rules.
+**Latest automated result:** 2 suites, 8 tests passing; lint and typecheck passing. No dependencies were added in phase 1.
 
-No authentication, door discovery, unlock adapter or backend has been implemented. No device/emulator run, APK build, tenant test or physical unlock has been performed. A JavaScript journey test does not establish native layout, accessibility or hardware behaviour.
+## Evidence limits and next phases
 
-## Development
+No connected Android device/emulator was available when checked, so no device smoke test, APK build, live tenant test or physical unlock was performed. JavaScript journey tests do not establish native layout, keyboard, TalkBack or hardware behaviour. App icons/splash assets remain starter assets pending the branding/delivery phase.
 
-Install the locked dependencies with `npm ci`, then start the existing Expo project with `npm start`. Use a compatible Expo Go installation or emulator for device checks. The implementation phases and agreed seams are documented in the workspace's [implementation plan](../implementation-plan.md).
+Phase 1 intentionally covers one dummy identity, one organisation, one COE match and one Cloud Key. MFA, persistent secure sessions/expiry and race handling belong to phase 2; broader discovery/permission cases to phase 3; durable pending markers, deadlines, cooldown and interruption/unknown-result recovery to phase 4. A failed request already receives conservative unconfirmed-result copy, but the full lifecycle is not implemented. The direct HTTPS adapter comes in phase 5.
 
-Do not enter real employee credentials into this launch shell. Demo and live environments will remain explicit as their adapters are introduced.
+The detailed implementation plan remains in the workspace at `../implementation-plan.md`.
