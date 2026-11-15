@@ -11,13 +11,13 @@ import { AccessBackdrop } from '@/components/access-backdrop';
 import { Brand, brandMarkSvg } from '@/constants/branding';
 import { useTheme } from '@/hooks/use-theme';
 
-export function AccessScreen({ children, ambient = false }: PropsWithChildren<{ ambient?: boolean }>) {
+export function AccessScreen({ children, backdrop = 'none' }: PropsWithChildren<{ backdrop?: 'none' | 'static' | 'animated' }>) {
   const { environment } = useLatch();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   return (
     <ThemedView style={{ flex: 1 }}>
-      <AccessBackdrop animate={ambient} />
+      {backdrop !== 'none' ? <AccessBackdrop animate={backdrop === 'animated'} /> : null}
       <ScrollView
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
@@ -25,11 +25,8 @@ export function AccessScreen({ children, ambient = false }: PropsWithChildren<{ 
         contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + Spacing.four,
           paddingBottom: insets.bottom + Spacing.five, paddingLeft: insets.left + Spacing.four, paddingRight: insets.right + Spacing.four }}>
         <View style={{ width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.four }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.one }}>
-            <View accessible={false} importantForAccessibility="no-hide-descendants">
-              <SvgXml xml={brandMarkSvg.replaceAll(Brand.foreground, theme.text)} width={48} height={48} />
-            </View>
-            <ThemedText style={{ fontSize: 28, lineHeight: 36, fontWeight: '800', letterSpacing: -1 }}>latch</ThemedText>
+          <View accessible accessibilityRole="image" accessibilityLabel="Latch" style={{ alignSelf: 'flex-start', marginLeft: -14 }}>
+            <SvgXml xml={brandMarkSvg.replaceAll(Brand.foreground, theme.text)} width={64} height={64} />
           </View>
           {environment === 'demo' ? <ThemedText selectable themeColor="textSecondary" style={{ fontSize: 12, lineHeight: 18 }}>Demo mode — simulated access</ThemedText> : null}
           {children}

@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
+import { Platform, StyleSheet, Text, type TextProps, type TextStyle } from 'react-native';
 
 import { Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -10,8 +10,12 @@ export type ThemedTextProps = TextProps & {
 
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
+  const resolved: TextStyle = StyleSheet.flatten([styles[type], style]) ?? {};
+  const weight = resolved.fontWeight === 'bold' ? 700 : Number(resolved.fontWeight ?? 400);
+  const face = weight >= 600 ? Fonts.bold : weight >= 500 ? Fonts.medium : Fonts.sans;
 
-  return <Text style={[{ color: theme[themeColor ?? 'text'] }, styles[type], style]} {...rest} />;
+  return <Text style={[{ color: theme[themeColor ?? 'text'] }, styles[type], style,
+    resolved.fontFamily ? undefined : { fontFamily: face, fontWeight: 'normal' }]} {...rest} />;
 }
 
 const styles = StyleSheet.create({

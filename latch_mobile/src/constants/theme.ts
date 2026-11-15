@@ -4,6 +4,7 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 import { Brand } from '@/constants/branding';
+import { FontFamily } from '@/constants/fonts';
 
 export const Colors = {
   light: {
@@ -38,7 +39,7 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-export const Fonts = Platform.select({
+export const Fonts = { ...Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
@@ -61,7 +62,7 @@ export const Fonts = Platform.select({
     rounded: 'var(--font-rounded)',
     mono: 'var(--font-mono)',
   },
-});
+}), sans: FontFamily.regular, medium: FontFamily.medium, bold: FontFamily.bold };
 
 export const Spacing = {
   half: 2,

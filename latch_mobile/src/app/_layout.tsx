@@ -3,6 +3,8 @@ import { Stack } from 'expo-router/stack';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Sentry from '@sentry/react-native';
+import { useFonts } from 'expo-font';
+import { fontAssets } from '@/constants/fonts';
 import { initializeMonitoring } from '@/monitoring/init';
 
 import { Notifications } from '@/components/notifications';
@@ -20,6 +22,10 @@ initializeMonitoring();
 type RootLayoutProps = { provider?: Openpath } & SessionOptions;
 function RootLayout({ provider, storage, attemptStorage, now }: RootLayoutProps = {}) {
   const colorScheme = useColorScheme();
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
+  // Keep the native splash during local font loading; a font error must not
+  // prevent sign-in, session restoration or access to recovery controls.
+  if (!fontsLoaded && !fontError) return null;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

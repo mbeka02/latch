@@ -152,6 +152,9 @@ test('demo launch identifies simulated access and offers sign-in without an unlo
   );
 
   expect(screen.getByText('Demo mode — simulated access')).toBeOnTheScreen();
+  expect(screen.getByText('BUILDING ACCESS')).toBeOnTheScreen();
+  expect(screen.queryByText('COE ACCESS')).not.toBeOnTheScreen();
+  expect(screen.queryByText('latch')).not.toBeOnTheScreen();
   expect(screen.getByRole('button', { name: 'Sign in' })).toBeOnTheScreen();
   expect(screen.queryByRole('button', { name: /unlock/i })).not.toBeOnTheScreen();
 });

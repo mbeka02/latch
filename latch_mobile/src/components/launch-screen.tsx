@@ -5,6 +5,7 @@ import { SvgXml } from 'react-native-svg';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { Brand, brandMarkSvg } from '@/constants/branding';
+import { Fonts } from '@/constants/theme';
 
 // Hold the native image until React has laid out the matching branded surface.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -64,5 +65,5 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFill, backgroundColor: Brand.background, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   mark: { width: 200, height: 200 },
   wordmark: { position: 'absolute', top: '50%', marginTop: 92, alignItems: 'center' },
-  name: { color: Brand.foreground, fontSize: 46, fontWeight: '800', letterSpacing: -2 },
+  name: { color: Brand.foreground, fontSize: 46, fontFamily: Fonts.bold, letterSpacing: -1 },
 });

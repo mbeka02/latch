@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Toaster, toast } from 'sonner-native';
 
 import { useLatch } from '@/services/latch-context';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export function Notifications() {
   const colorScheme = useColorScheme();
@@ -19,7 +19,9 @@ export function Notifications() {
       duration={5000}
       visibleToasts={1}
       position="top-center"
-      toastOptions={{ style: { width: toastWidth, alignSelf: 'center' } }}
+      toastOptions={{ style: { width: toastWidth, alignSelf: 'center' },
+        titleStyle: { fontFamily: Fonts.bold, fontWeight: 'normal' },
+        descriptionStyle: { fontFamily: Fonts.sans, fontWeight: 'normal' } }}
       ToastWrapper={DismissibleNotification}
     />
   );

@@ -7,7 +7,7 @@ import { toast } from 'sonner-native';
 import { AccessScreen } from '@/components/access-screen';
 import { ActionButton } from '@/components/action-button';
 import { ThemedText } from '@/components/themed-text';
-import { AccessLayout, Spacing } from '@/constants/theme';
+import { AccessLayout, Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useLatch } from '@/services/latch-context';
 import { AccessError, safeAccessError } from '@/lib/access-error';
@@ -35,6 +35,7 @@ export default function HomeScreen() {
     minHeight: 56,
     padding: Spacing.three,
     fontSize: 16,
+    fontFamily: Fonts.sans,
   };
 
   async function submit() {
@@ -64,9 +65,9 @@ export default function HomeScreen() {
   }
 
   return (
-    <AccessScreen ambient={focused}>
+    <AccessScreen backdrop={focused ? 'animated' : 'static'}>
       <View style={{ gap: Spacing.two, paddingTop: Spacing.three, paddingBottom: Spacing.two }}>
-        <ThemedText themeColor="textSecondary" style={{ fontSize: 12, lineHeight: 18, letterSpacing: 2, fontWeight: '600' }}>COE ACCESS</ThemedText>
+        <ThemedText themeColor="textSecondary" style={{ fontSize: 12, lineHeight: 18, letterSpacing: 2, fontWeight: '500' }}>BUILDING ACCESS</ThemedText>
         <ThemedText accessibilityRole="header" style={{ fontSize: AccessLayout.titleSize, lineHeight: AccessLayout.titleLineHeight, fontWeight: '700', letterSpacing: -1 }}>Sign in to Latch</ThemedText>
         <ThemedText themeColor="textSecondary">{simulated ? 'Try Latch with a demo account.' : 'Use your Avigilon Alta account.'}</ThemedText>
       </View>
