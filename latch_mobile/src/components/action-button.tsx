@@ -1,14 +1,15 @@
 import { Pressable } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { AccessLayout, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export function ActionButton({ label, onPress, disabled = false, secondary = false }: {
+export function ActionButton({ label, onPress, disabled = false, secondary = false, quiet = false }: {
   label: string;
   onPress?: () => void;
   disabled?: boolean;
   secondary?: boolean;
+  quiet?: boolean;
 }) {
   const theme = useTheme();
   return (
@@ -23,11 +24,11 @@ export function ActionButton({ label, onPress, disabled = false, secondary = fal
         padding: Spacing.three,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: Spacing.two,
+        borderRadius: AccessLayout.controlRadius,
         opacity: disabled ? 0.5 : pressed ? 0.8 : 1,
-        backgroundColor: secondary ? theme.backgroundElement : theme.action,
+        backgroundColor: quiet ? 'transparent' : secondary ? theme.backgroundElement : theme.action,
       })}>
-      <ThemedText style={{ color: secondary ? theme.text : theme.actionText }}>{label}</ThemedText>
+      <ThemedText style={{ color: quiet ? theme.textSecondary : secondary ? theme.text : theme.actionText, fontWeight: '600' }}>{label}</ThemedText>
     </Pressable>
   );
 }

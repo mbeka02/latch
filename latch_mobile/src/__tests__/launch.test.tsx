@@ -95,7 +95,10 @@ test('the actual live journey offers TOTP up front and reports API acceptance wi
   });
   const Layout = () => <RootLayout provider={provider} />;
   await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
-  expect(screen.getByText('Alta access — live requests')).toBeOnTheScreen();
+  expect(screen.getByRole('header', { name: 'Sign in to Latch' })).toBeOnTheScreen();
+  expect(screen.queryByText('Demo mode — simulated access')).not.toBeOnTheScreen();
+  expect(screen.queryByText(/MFA demo:/)).not.toBeOnTheScreen();
+  expect(screen.queryByText(/Organisation and door choices:/)).not.toBeOnTheScreen();
   expect(screen.queryByText(/demo@latch/)).not.toBeOnTheScreen();
   await fireEvent.press(screen.getByRole('button', { name: 'Use authenticator code' }));
   await fireEvent.changeText(screen.getByLabelText('Email'), 'employee@example.com');
@@ -115,7 +118,9 @@ test('an explicitly live build without its native client cannot silently use the
   process.env.EXPO_PUBLIC_LATCH_MODE = 'live';
   try {
     await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
-    expect(screen.getByText('Alta access — live requests')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Sign in to Latch' })).toBeOnTheScreen();
+    expect(screen.queryByText('Demo mode — simulated access')).not.toBeOnTheScreen();
+    expect(screen.queryByText(/demo@latch/)).not.toBeOnTheScreen();
     await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
     await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
     await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
@@ -173,7 +178,7 @@ test('failed sign-in shows a toast and keeps recovery guidance on the form', asy
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
 
   expect(await screen.findByText('Unable to sign in')).toBeOnTheScreen();
-  expect(screen.getByRole('alert')).toHaveTextContent('Sign-in failed. Use the demo account shown above.');
+  expect(screen.getByRole('alert')).toHaveTextContent('Sign-in failed. Check the demo account details.');
   expect(screen.getByLabelText('Password')).toHaveDisplayValue('');
   expect(screen).toHavePathname('/');
 

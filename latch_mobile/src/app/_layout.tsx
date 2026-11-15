@@ -43,7 +43,7 @@ function SessionStack() {
   const { session, authState } = useLatch();
   if (authState.status === 'restoring') return <AccessScreen><ThemedText>Checking secure session…</ThemedText></AccessScreen>;
   return (
-    <Stack>
+    <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="index" options={{ title: 'Sign in to Latch' }} />
       </Stack.Protected>

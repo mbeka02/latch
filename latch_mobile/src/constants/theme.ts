@@ -1,16 +1,14 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://unistyl.es/), etc.
- */
+// Shared light/dark colors, typography and layout tokens for Latch.
 
 import '@/global.css';
 
 import { Platform } from 'react-native';
+import { Brand } from '@/constants/branding';
 
 export const Colors = {
   light: {
     text: '#000000',
-    background: '#ffffff',
+    background: '#F7F7F8',
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
@@ -20,19 +18,21 @@ export const Colors = {
     modalSurface: '#FFFFFF',
     modalOutline: '#E0E1E6',
     scrim: '#00000080',
+    ambientLine: '#A4A6AC',
   },
   dark: {
     text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
+    background: Brand.background,
+    backgroundElement: '#1C1D20',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
     action: '#C9161D',
     actionText: '#FFFFFF',
-    inputOutline: '#8E8E93',
+    inputOutline: '#777B83',
     modalSurface: '#18191C',
     modalOutline: '#323438',
     scrim: '#000000A6',
+    ambientLine: '#61656E',
   },
 } as const;
 
@@ -75,3 +75,9 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 480;
+
+export const AccessLayout = {
+  controlRadius: 14,
+  titleSize: 36,
+  titleLineHeight: 42,
+} as const;
