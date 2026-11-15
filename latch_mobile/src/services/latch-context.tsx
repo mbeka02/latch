@@ -6,6 +6,7 @@ import { createLatch, type AuthSnapshot, type SessionOptions, type UnlockSnapsho
 import { createMockOpenpath } from '@/services/mocks/openpath';
 import { createOpenpath } from '@/services/openpath';
 import { createAndroidTransport } from '@/services/openpath-transport';
+import { reportUnlockOutcome } from '@/monitoring/operations';
 import { secureAttemptStorage, secureSessionStorage } from '@/storage/session';
 
 type LatchContextValue = {
@@ -38,6 +39,7 @@ export function LatchProvider({ children, provider, storage, attemptStorage, now
   });
   const authState = useSyncExternalStore(app.auth.subscribe, app.auth.getSnapshot, app.auth.getSnapshot);
   const unlockState = useSyncExternalStore(app.doors.subscribe, app.doors.getSnapshot, app.doors.getSnapshot);
+  useEffect(() => { reportUnlockOutcome(unlockState.status); }, [unlockState.status]);
   const [completedCooldown, setCompletedCooldown] = useState(0);
   const coolingDown = unlockState.cooldownUntil > Math.max(now(), completedCooldown);
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { AccessError } from '@/lib/access-error';
 import type { Openpath, SessionHints, UserSession, Membership, UserContext, Credential } from '@/lib/openpath';
+import { observeOperation } from '@/monitoring/operations';
 
 function bad(): never { throw new AccessError('unavailable'); }
 function object(value: unknown): Record<string, unknown> {
@@ -32,23 +33,27 @@ export type OpenpathTransport = (request: OpenpathRequest, signal: AbortSignal) 
 
 export function createOpenpath(transport: OpenpathTransport, options: { namespaceNickname?: string } = {}): Openpath {
   async function send(request: OpenpathRequest, expected: number) {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => { controller.abort(); reject(new AccessError('unavailable')); }, 15_000);
+    const operation = request.path === '/auth/login' ? 'login' : request.path.endsWith('/cloudKeyEntryUnlock') ? 'unlock'
+      : request.path.endsWith('/entries') ? 'entries' : request.path.includes('/credentials?') ? 'credentials' : 'session-check';
+    return observeOperation(operation, async () => {
+      const controller = new AbortController();
+      let timer: ReturnType<typeof setTimeout>;
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(new AccessError('unavailable')); }, 15_000);
+      });
+      let response;
+      try { response = await Promise.race([transport(request, controller.signal), deadline]); }
+      catch { return bad(); }
+      finally { clearTimeout(timer!); }
+      if (response.status !== expected) {
+        // Status policies, not vendor error-code contracts. Never expose the body.
+        if (request.path === '/auth/login' && [400, 401, 403].includes(response.status)) throw new AccessError('invalid-credentials');
+        if (response.status === 401) throw new AccessError('expired');
+        if (response.status === 403) throw new AccessError('access-denied');
+        return bad();
+      }
+      return response;
     });
-    let response;
-    try { response = await Promise.race([transport(request, controller.signal), deadline]); }
-    catch { return bad(); }
-    finally { clearTimeout(timer!); }
-    if (response.status !== expected) {
-      // Status policies, not vendor error-code contracts. Never expose the body.
-      if (request.path === '/auth/login' && [400, 401, 403].includes(response.status)) throw new AccessError('invalid-credentials');
-      if (response.status === 401) throw new AccessError('expired');
-      if (response.status === 403) throw new AccessError('access-denied');
-      return bad();
-    }
-    return response;
   }
   async function profileSession(token: string, hints: SessionHints) {
     text(token);
