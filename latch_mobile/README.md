@@ -15,6 +15,8 @@ The password starts hidden. Tap the eye icon to show or hide it; the entered val
 
 Sign in to discover **COE Door (simulated)**. Tap **Unlock COE Door**, then choose **Cancel** or **Unlock** in the native confirmation. Confirmation shows **Simulated unlock accepted. No physical door was operated.** Sign out returns to the sign-in screen.
 
+[Sonner Native](https://sonner-native.netlify.app/) relays sign-in errors, unavailable access, accepted unlock requests and unconfirmed results. Notifications match the system light/dark theme, disappear after five seconds, and can be tapped or swiped away. Error guidance and door outcomes also remain on screen after dismissal. Signing in or out clears previous session notifications. The unlock confirmation stays a native dialog; notifications never dispatch or retry an unlock.
+
 Do not enter real employee credentials. Only the documented dummy account is accepted. The current composition always selects the in-process mock adapter; there is no live adapter, environment toggle or network fallback.
 
 ## Implementation
@@ -52,8 +54,14 @@ Phase 0 established the runner by observing the missing demo-label failure, then
 | S4 | No native confirmation opened | Cancel leaves the provider request history empty |
 | S4 | Confirmation had no Unlock action | Confirm dispatches one simulated command and displays truthful acceptance |
 | S4 | No Show password control | Eye toggle shows/hides the password while preserving its value |
+| S4 | Sign-in error had no notification; stale error survived recovery | Error toast accompanies persistent guidance and clears when sign-in succeeds |
+| S4 | Accepted unlock had no toast or accessible dismissal | Acceptance toast dismisses on tap while the door result remains visible |
+| S4 | Failed unlock had no warning toast | Unconfirmed-result warning dismisses without removing the persistent outcome |
+| S4 | Unavailable access had no error toast | Error toast accompanies persistent unavailable state with no unlock action |
 
-**Latest automated result:** 2 suites, 9 tests passing; lint and typecheck passing. No dependencies were added in phase 1 or for the password toggle.
+**Latest automated result:** 2 suites, 12 tests passing; lint and typecheck passing. Notification tests render the actual Sonner component rather than mocking toast calls. The toast enhancement adds `sonner-native` and Expo SDK 58's compatible `react-native-svg`; its other peers were already installed.
+
+The Android production JavaScript/Hermes export also passes with the toast dependencies. This checks Metro compilation, not APK packaging or native runtime behaviour.
 
 ## Evidence limits and next phases
 

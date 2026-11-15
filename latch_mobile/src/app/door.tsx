@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
+import { toast } from 'sonner-native';
 
 import { AccessScreen } from '@/components/access-screen';
 import { ActionButton } from '@/components/action-button';
@@ -21,13 +22,18 @@ export default function DoorScreen() {
 
   useEffect(() => {
     let active = true;
+    function unavailable() {
+      if (!active) return;
+      setState({ status: 'unavailable' });
+      toast.error('COE access unavailable', { description: 'Door access could not be prepared for this session.' });
+    }
     app.doors.discoverDoors().then(
       ([door]) => {
-        if (active) setState(door ? { status: 'ready', door } : { status: 'unavailable' });
+        if (!active) return;
+        if (door) setState({ status: 'ready', door });
+        else unavailable();
       },
-      () => {
-        if (active) setState({ status: 'unavailable' });
-      },
+      unavailable,
     );
     return () => { active = false; };
   }, [app]);
@@ -40,8 +46,12 @@ export default function DoorScreen() {
       setOutcome(result.simulated
         ? 'Simulated unlock accepted. No physical door was operated.'
         : 'Unlock request accepted. Door position has not been confirmed.');
+      toast.success(result.simulated ? 'Simulated unlock accepted' : 'Unlock request accepted', {
+        description: result.simulated ? 'No physical door was operated.' : 'Door position has not been confirmed.',
+      });
     } catch {
       setOutcome("We couldn't confirm the result. Check before trying again.");
+      toast.warning('Unlock result unconfirmed', { description: 'Check the door before trying again.' });
     } finally {
       setPending(false);
     }

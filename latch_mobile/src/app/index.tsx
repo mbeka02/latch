@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, TextInput, View } from 'react-native';
+import { toast } from 'sonner-native';
 
 import { AccessScreen } from '@/components/access-screen';
 import { ActionButton } from '@/components/action-button';
@@ -39,6 +40,7 @@ export default function HomeScreen() {
       await signIn(input);
     } catch {
       setError('Sign-in failed. Use the demo account shown above.');
+      toast.error('Unable to sign in', { description: 'Check the demo credentials and try again.' });
     } finally {
       setBusy(false);
     }
