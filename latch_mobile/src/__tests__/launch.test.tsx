@@ -10,10 +10,75 @@ import HomeScreen from '@/app/index';
 import DoorScreen from '@/app/door';
 import { createMockOpenpath } from '@/services/mocks/openpath';
 import { createLatch } from '@/services/latch';
+import { createOpenpath, type OpenpathRequest } from '@/services/openpath';
 
 afterEach(async () => {
   await act(async () => { toast.dismiss(); });
   jest.restoreAllMocks();
+});
+
+test('the actual live journey offers TOTP up front and reports API acceptance without claiming physical opening', async () => {
+  const requests: OpenpathRequest[] = [];
+  const provider = createOpenpath(async (request) => {
+    requests.push(request);
+    if (request.path.endsWith('/cloudKeyEntryUnlock')) return { status: 204, body: '' };
+    let response: unknown;
+    if (request.path === '/auth/login') response = { data: { token: 'fixture-token', identityId: 17, identity: { id: 17 },
+      tokenScopeList: [{ org: { id: 31, name: 'IFSS' }, user: { id: 42 } }] } };
+    else if (request.path === '/orgs/31/users/42') response = { data: { id: 42, identity: { id: 17, email: 'employee@example.com',
+      users: [{ id: 42, org: { id: 31, name: 'IFSS' } }] } } };
+    else if (request.path.endsWith('/entries')) response = { filteredCount: 1, data: [
+      { id: 90, name: 'COE Door', zone: { id: 8, name: 'COE', site: { id: 9, name: 'Main building' } } },
+    ] };
+    else if (request.path.includes('/credentials?')) response = { data: request.path.includes('offset=0&') ? [{ id: 71, cloudKey: { id: 701 } }] : [] };
+    else throw new Error('Unexpected HTTP request');
+    return { status: request.path === '/auth/login' ? 201 : 200, body: JSON.stringify(response) };
+  });
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  expect(screen.getByText('Alta access — live requests')).toBeOnTheScreen();
+  expect(screen.queryByText(/demo@latch/)).not.toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Use authenticator code' }));
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'employee@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'fixture-password');
+  await fireEvent.changeText(screen.getByLabelText('Authenticator code'), '654321');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  expect(screen.getByText('This requests a real door unlock using your Alta permissions.')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Unlock' }));
+  expect(await screen.findByText('Unlock request accepted. Door position has not been confirmed.')).toBeOnTheScreen();
+  expect(requests.filter(({ path }) => path.endsWith('/cloudKeyEntryUnlock'))).toHaveLength(1);
+  expect(requests[0].body).toMatchObject({ mfa: { totpCode: '654321' } });
+});
+
+test('an explicitly live build without its native client cannot silently use the demo account', async () => {
+  const previous = process.env.EXPO_PUBLIC_LATCH_MODE;
+  process.env.EXPO_PUBLIC_LATCH_MODE = 'live';
+  try {
+    await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+    expect(screen.getByText('Alta access — live requests')).toBeOnTheScreen();
+    await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('Unable to sign in')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Unlock COE Door' })).not.toBeOnTheScreen();
+  } finally {
+    if (previous === undefined) delete process.env.EXPO_PUBLIC_LATCH_MODE;
+    else process.env.EXPO_PUBLIC_LATCH_MODE = previous;
+  }
+});
+
+test('an unresolved unlock does not prevent local sign-out through its confirmation modal', async () => {
+  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'uncertain@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Unlock' }));
+  await screen.findByRole('button', { name: 'Acknowledge result' });
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+  await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Sign out' }));
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeOnTheScreen();
 });
 
 test('demo launch identifies simulated access and offers sign-in without an unlock action', async () => {

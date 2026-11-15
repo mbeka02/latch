@@ -13,7 +13,8 @@ import { AccessError, safeAccessError } from '@/lib/access-error';
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const { signIn, signOut, authState, retrySession } = useLatch();
+  const { signIn, signOut, authState, retrySession, environment } = useLatch();
+  const simulated = environment === 'demo';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -45,7 +46,7 @@ export default function HomeScreen() {
     } catch (error) {
       const failure = safeAccessError(error);
       if (failure.code === 'stale-operation') return;
-      setError(failure.code === 'invalid-credentials' ? 'Sign-in failed. Use the demo account shown above.' : failure.message);
+      setError(simulated && failure.code === 'invalid-credentials' ? 'Sign-in failed. Use the demo account shown above.' : failure.message);
       if (failure.code === 'mfa-required' || failure.code === 'mfa-invalid') {
         setMfaRequired(true);
         if (failure.code === 'mfa-required') toast.info('Authenticator code required');
@@ -60,17 +61,22 @@ export default function HomeScreen() {
 
   return (
     <AccessScreen>
+      {simulated ? <>
       <ThemedText>Use a demo account. No physical door will be operated.</ThemedText>
       <ThemedText selectable themeColor="textSecondary">
         Email: demo@latch.example{'\n'}Password: latch-demo-only{'\n'}
         MFA demo: mfa@latch.example · Code: 123456{'\n'}
         Organisation and door choices: multi@latch.example
       </ThemedText>
+      </> : <>
+        <ThemedText>Sign in with your Avigilon Alta account.</ThemedText>
+        <ThemedText themeColor="textSecondary">Use native email and password, with your authenticator code if required. SSO-only sign-in is not supported.</ThemedText>
+      </>}
       <ThemedText>Email</ThemedText>
       <TextInput
         accessibilityLabel="Email"
         value={email}
-        onChangeText={(value) => { setEmail(value); setMfaRequired(false); setTotpCode(''); setError(''); }}
+        onChangeText={(value) => { setEmail(value); if (simulated) setMfaRequired(false); setTotpCode(''); setError(''); }}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
@@ -123,6 +129,8 @@ export default function HomeScreen() {
           />
         </Pressable>
       </View>
+      {!simulated && !mfaRequired ? <ActionButton label="Use authenticator code" secondary disabled={busy}
+        onPress={() => setMfaRequired(true)} /> : null}
       {mfaRequired ? (
         <>
           <ThemedText>Authenticator code</ThemedText>

@@ -4,9 +4,12 @@ import { AppState } from 'react-native';
 import type { Openpath, SignInInput, UserSession } from '@/lib/openpath';
 import { createLatch, type AuthSnapshot, type SessionOptions, type UnlockSnapshot } from '@/services/latch';
 import { createMockOpenpath } from '@/services/mocks/openpath';
+import { createOpenpath } from '@/services/openpath';
+import { createAndroidTransport } from '@/services/openpath-transport';
 import { secureAttemptStorage, secureSessionStorage } from '@/storage/session';
 
 type LatchContextValue = {
+  environment: Openpath['environment'];
   app: ReturnType<typeof createLatch>;
   session: UserSession | null;
   authState: AuthSnapshot;
@@ -19,10 +22,17 @@ type LatchContextValue = {
 
 const LatchContext = createContext<LatchContextValue | null>(null);
 
+function configuredProvider(): Openpath {
+  const mode = process.env.EXPO_PUBLIC_LATCH_MODE ?? 'demo';
+  if (mode === 'demo') return createMockOpenpath();
+  if (mode !== 'live') throw new Error('EXPO_PUBLIC_LATCH_MODE must be demo or live.');
+  return createOpenpath(createAndroidTransport(), { namespaceNickname: process.env.EXPO_PUBLIC_ALTA_NAMESPACE });
+}
+
 export function LatchProvider({ children, provider, storage, attemptStorage, now = Date.now }: PropsWithChildren<{ provider?: Openpath } & SessionOptions>) {
-  // One app instance per mount. There is no live adapter or runtime environment switch yet.
+  const [adapter] = useState(() => provider ?? configuredProvider());
+  // One provider and one app instance per mount; environments never switch mid-session.
   const [app] = useState(() => {
-    const adapter = provider ?? createMockOpenpath();
     return createLatch(adapter, { now, storage: storage ?? secureSessionStorage(adapter.environment),
       attemptStorage: attemptStorage ?? secureAttemptStorage(adapter.environment) });
   });
@@ -61,7 +71,7 @@ export function LatchProvider({ children, provider, storage, attemptStorage, now
     void app.auth.signOut().catch(() => {});
   }
 
-  return <LatchContext value={{ app, session: authState.session, authState, unlockState, coolingDown, retrySession, signIn, signOut }}>{children}</LatchContext>;
+  return <LatchContext value={{ environment: adapter.environment, app, session: authState.session, authState, unlockState, coolingDown, retrySession, signIn, signOut }}>{children}</LatchContext>;
 }
 
 export function useLatch() {

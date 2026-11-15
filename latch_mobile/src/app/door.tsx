@@ -17,7 +17,8 @@ type DoorState =
   | { status: 'unavailable'; message: string };
 
 export default function DoorScreen() {
-  const { app, session, signOut, unlockState, coolingDown } = useLatch();
+  const { app, session, signOut, unlockState, coolingDown, environment } = useLatch();
+  const simulated = environment === 'demo';
   const [state, setState] = useState<DoorState>({ status: 'loading' });
   const [organisations, setOrganisations] = useState<OrganisationChoice[]>([]);
   const [organisationKey, setOrganisationKey] = useState<string>();
@@ -28,7 +29,7 @@ export default function DoorScreen() {
   const pending = unlockState.status === 'pending';
   const unlockBlocked = pending || coolingDown || unlockState.requiresAcknowledgement || acknowledging;
   const outcome = unlockState.status === 'accepted'
-    ? 'Simulated unlock accepted. No physical door was operated.'
+    ? simulated ? 'Simulated unlock accepted. No physical door was operated.' : 'Unlock request accepted. Door position has not been confirmed.'
     : unlockState.status === 'denied' ? 'The provider denied the unlock request.'
     : unlockState.status === 'unknown' ? "We couldn't confirm the result. Check before trying again."
     : unlockState.status === 'not-sent' ? 'Unlock request not sent. ' + (unlockState.error ? new AccessError(unlockState.error).message : '')
@@ -114,12 +115,12 @@ export default function DoorScreen() {
       </> : null}
       {state.status === 'ready' ? (
         <>
-          <ThemedText type="subtitle" accessibilityRole="header">{state.door.name} (simulated)</ThemedText>
+          <ThemedText type="subtitle" accessibilityRole="header">{state.door.name}{simulated ? ' (simulated)' : ''}</ThemedText>
           <ThemedText selectable themeColor="textSecondary">
             {state.door.organisation} · {state.door.site} · {state.door.zone}
           </ThemedText>
           <ThemedText>{pending ? 'Request in progress' : unlockState.requiresAcknowledgement ? 'Previous result needs acknowledgement'
-            : coolingDown ? 'Please wait before another request' : 'Ready to request a simulated unlock'}</ThemedText>
+            : coolingDown ? 'Please wait before another request' : simulated ? 'Ready to request a simulated unlock' : 'Ready to request an unlock'}</ThemedText>
           <ActionButton
             label={pending ? 'Requesting unlock…' : `Unlock ${state.door.name}`}
             disabled={confirming || confirmingSignOut || unlockBlocked}
@@ -140,7 +141,7 @@ export default function DoorScreen() {
               <ActionButton label="Cancel" secondary onPress={() => setConfirming(false)} />
             </>}>
             <ThemedText themeColor="textSecondary">{state.door.organisation} · {state.door.site} · {state.door.zone}</ThemedText>
-            <ThemedText>Demo only. No physical door will be operated.</ThemedText>
+            <ThemedText>{simulated ? 'Demo only. No physical door will be operated.' : 'This requests a real door unlock using your Alta permissions.'}</ThemedText>
           </AppModal>
         </>
       ) : null}
@@ -180,7 +181,7 @@ export default function DoorScreen() {
         onClose={() => setConfirmingSignOut(false)}
         actions={<>
           <ActionButton label="Sign out" disabled={!confirmingSignOut || pending} onPress={() => {
-            if (!confirmingSignOut || unlockBlocked) return;
+            if (!confirmingSignOut || pending) return;
             setConfirmingSignOut(false);
             signOut();
           }} />

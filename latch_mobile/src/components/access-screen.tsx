@@ -4,8 +4,10 @@ import { ScrollView } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useLatch } from '@/services/latch-context';
 
 export function AccessScreen({ children }: PropsWithChildren) {
+  const { environment } = useLatch();
   return (
     <ThemedView style={{ flex: 1 }}>
       <ScrollView
@@ -14,7 +16,7 @@ export function AccessScreen({ children }: PropsWithChildren) {
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ flexGrow: 1, padding: Spacing.four }}>
         <ThemedView style={{ width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.three }}>
-          <ThemedText selectable>Demo mode — simulated access</ThemedText>
+          <ThemedText selectable>{environment === 'demo' ? 'Demo mode — simulated access' : 'Alta access — live requests'}</ThemedText>
           {children}
         </ThemedView>
       </ScrollView>
