@@ -210,7 +210,8 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
           expiresAt = Math.min(startedAt + SESSION_CAP_MS, candidate.expiresAt ?? Infinity);
           if (expiresAt <= now()) throw new AccessError('expired');
           const record = JSON.stringify({ version: 1, environment: provider.environment,
-            token: candidate.token, identityId: candidate.user.identityId, startedAt, expiresAt });
+            token: candidate.token, identityId: candidate.user.identityId, startedAt, expiresAt,
+            associations: candidate.memberships.map(({ orgId, userId }) => ({ orgId, userId })) });
           if (storage) await stored(() => storage.write(record));
           assertCurrent(operation);
           if (now() >= expiresAt || now() < startedAt) throw new AccessError('expired');
@@ -243,7 +244,8 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
           const raw = storage ? await stored(() => storage.read()) : null;
           assertCurrent(operation);
           if (!raw) { publish('signed-out'); return null; }
-          let saved: { token: string; identityId: string; startedAt: number; expiresAt: number; environment: string; version: number };
+          let saved: { token: string; identityId: string; startedAt: number; expiresAt: number; environment: string; version: number;
+            associations?: { orgId: number; userId: number }[] };
           try {
             saved = JSON.parse(raw);
             if (!saved || saved.version !== 1 || saved.environment !== provider.environment ||
@@ -256,7 +258,8 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
           if (now() < saved.startedAt || now() >= Math.min(saved.expiresAt, saved.startedAt + SESSION_CAP_MS)) {
             throw new AccessError('expired');
           }
-          const candidate = await provider.checkSession(saved.token);
+          const candidate = await provider.checkSession(saved.token,
+            saved.associations ? { identityId: saved.identityId, associations: saved.associations } : undefined);
           assertCurrent(operation);
           if (candidate.expiresAt !== null && !Number.isFinite(candidate.expiresAt)) throw new AccessError('unavailable');
           if (candidate.token !== saved.token || candidate.user.identityId !== saved.identityId) throw new AccessError('expired');
