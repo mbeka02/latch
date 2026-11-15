@@ -11,10 +11,22 @@ import DoorScreen from '@/app/door';
 import { createMockOpenpath } from '@/services/mocks/openpath';
 import { createLatch } from '@/services/latch';
 import { createOpenpath, type OpenpathRequest } from '@/services/openpath';
+import * as Sentry from '@sentry/react-native';
 
 afterEach(async () => {
   await act(async () => { toast.dismiss(); });
   jest.restoreAllMocks();
+});
+
+test('the opt-in demo verification control sends an identifiable error through the app without signing in or unlocking', async () => {
+  process.env.EXPO_PUBLIC_SENTRY_VERIFY = '1';
+  jest.mocked(Sentry.captureException).mockClear();
+  try {
+    await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+    await fireEvent.press(screen.getByRole('button', { name: 'Send Sentry test error' }));
+    await waitFor(() => expect(Sentry.captureException).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/^Latch Sentry verification \d{13}$/) })));
+    expect(screen.queryByRole('button', { name: 'Unlock COE Door' })).not.toBeOnTheScreen();
+  } finally { delete process.env.EXPO_PUBLIC_SENTRY_VERIFY; }
 });
 
 test('the actual live journey offers TOTP up front and reports API acceptance without claiming physical opening', async () => {
@@ -323,6 +335,7 @@ test('a removed entry requires refreshed access and a fresh confirmation without
 });
 
 test('an unlock failure shows a warning toast and preserves the uncertain result after dismissal', async () => {
+  jest.mocked(Sentry.logger.warn).mockClear();
   const provider = {
     ...createMockOpenpath(),
     async unlockEntry() { throw new Error('Provider details should not be displayed.'); },
@@ -339,6 +352,7 @@ test('an unlock failure shows a warning toast and preserves the uncertain result
 
   expect(screen.queryByText('Unlock result unconfirmed')).not.toBeOnTheScreen();
   expect(screen.getByText("We couldn't confirm the result. Check before trying again.")).toBeOnTheScreen();
+  expect(Sentry.logger.warn).toHaveBeenCalledWith('Latch unlock outcome', { 'latch.operation': 'unlock', 'latch.result': 'unknown' });
   expect(screen.getByRole('button', { name: 'Acknowledge result' })).toBeOnTheScreen();
   expect(screen.getByRole('button', { name: 'Unlock COE Door' })).toBeDisabled();
   expect(screen.queryByText('Simulated unlock accepted')).not.toBeOnTheScreen();

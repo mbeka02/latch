@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useLatch } from '@/services/latch-context';
 import { AccessError, safeAccessError } from '@/lib/access-error';
+import { sendMonitoringVerification } from '@/monitoring/verification';
 
 export default function HomeScreen() {
   const theme = useTheme();
@@ -22,6 +23,7 @@ export default function HomeScreen() {
   const [totpCode, setTotpCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [verification, setVerification] = useState('');
   const inputStyle = {
     color: theme.text,
     backgroundColor: theme.backgroundElement,
@@ -159,6 +161,13 @@ export default function HomeScreen() {
         signOut();
         setPassword(''); setTotpCode(''); setPasswordVisible(false); setMfaRequired(false); setError('');
       }} /> : null}
+      {__DEV__ && simulated && process.env.EXPO_PUBLIC_SENTRY_VERIFY === '1' ? <>
+        <ActionButton label="Send Sentry test error" secondary disabled={busy} onPress={async () => {
+          try { setVerification(`${await sendMonitoringVerification()} queued. Receipt still needs confirmation in Sentry.`); }
+          catch { setVerification('The test error could not be queued.'); }
+        }} />
+        {verification ? <ThemedText selectable accessibilityLiveRegion="polite">{verification}</ThemedText> : null}
+      </> : null}
     </AccessScreen>
   );
 }
