@@ -17,6 +17,9 @@ export const Colors = {
     action: '#C9161D',
     actionText: '#FFFFFF',
     inputOutline: '#767676',
+    modalSurface: '#FFFFFF',
+    modalOutline: '#E0E1E6',
+    scrim: '#00000080',
   },
   dark: {
     text: '#ffffff',
@@ -27,6 +30,9 @@ export const Colors = {
     action: '#C9161D',
     actionText: '#FFFFFF',
     inputOutline: '#8E8E93',
+    modalSurface: '#18191C',
+    modalOutline: '#323438',
+    scrim: '#000000A6',
   },
 } as const;
 

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert } from 'react-native';
 import { toast } from 'sonner-native';
 
 import { AccessScreen } from '@/components/access-screen';
@@ -8,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import type { DoorChoice } from '@/services/latch';
 import { useLatch } from '@/services/latch-context';
 import { safeAccessError } from '@/lib/access-error';
+import { AppModal } from '@/components/app-modal';
 
 type DoorState =
   | { status: 'loading' }
@@ -64,20 +64,7 @@ export default function DoorScreen() {
 
   function confirmUnlock() {
     if (state.status !== 'ready' || confirming || pending) return;
-    const { door } = state;
     setConfirming(true);
-    Alert.alert(
-      `Unlock ${door.name}?`,
-      `${door.organisation} · ${door.site} · ${door.zone}\nDemo only. No physical door will be operated.`,
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => setConfirming(false) },
-        { text: 'Unlock', onPress: () => {
-          setConfirming(false);
-          void requestUnlock(door.key);
-        } },
-      ],
-      { cancelable: true, onDismiss: () => setConfirming(false) },
-    );
   }
 
   return (
@@ -99,6 +86,21 @@ export default function DoorScreen() {
             onPress={confirmUnlock}
           />
           {outcome ? <ThemedText selectable accessibilityLiveRegion="polite">{outcome}</ThemedText> : null}
+          <AppModal
+            visible={confirming}
+            title={`Unlock ${state.door.name}?`}
+            onClose={() => setConfirming(false)}
+            actions={<>
+              <ActionButton label="Unlock" disabled={!confirming || pending} onPress={() => {
+                if (!confirming || pending) return;
+                setConfirming(false);
+                void requestUnlock(state.door.key);
+              }} />
+              <ActionButton label="Cancel" secondary onPress={() => setConfirming(false)} />
+            </>}>
+            <ThemedText themeColor="textSecondary">{state.door.organisation} · {state.door.site} · {state.door.zone}</ThemedText>
+            <ThemedText>Demo only. No physical door will be operated.</ThemedText>
+          </AppModal>
         </>
       ) : null}
       <ThemedText selectable>{session?.email}</ThemedText>

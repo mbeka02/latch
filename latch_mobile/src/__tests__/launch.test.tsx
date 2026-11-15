@@ -1,5 +1,5 @@
-import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Alert, AppState, type AppStateStatus } from 'react-native';
+import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
+import { AppState, type AppStateStatus } from 'react-native';
 import { toast } from 'sonner-native';
 import * as SecureStore from 'expo-secure-store';
 import type { ProviderSession } from '@/lib/openpath';
@@ -59,9 +59,8 @@ test('failed sign-in shows a toast and keeps recovery guidance on the form', asy
   expect(screen.queryByText('Unable to sign in')).not.toBeOnTheScreen();
 });
 
-test('cancelling the native confirmation leaves the simulated door unrequested', async () => {
+test('cancelling the themed confirmation leaves the simulated door unrequested', async () => {
   const provider = createMockOpenpath();
-  const nativeAlert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const Layout = () => <RootLayout provider={provider} />;
   await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
   await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
@@ -69,18 +68,34 @@ test('cancelling the native confirmation leaves the simulated door unrequested',
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
 
-  expect(nativeAlert.mock.lastCall?.[0]).toBe('Unlock COE Door?');
-  const cancel = nativeAlert.mock.lastCall?.[2]?.find((button) => button.text === 'Cancel');
-  expect(cancel).toBeDefined();
-  await act(async () => { cancel?.onPress?.(); });
+  expect(await screen.findByRole('header', { name: 'Unlock COE Door?' })).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
 
   expect(provider.getUnlockRequests()).toEqual([]);
+  await waitFor(() => expect(screen.queryByRole('header', { name: 'Unlock COE Door?' })).not.toBeOnTheScreen());
   expect(screen.queryByText('Simulated unlock accepted. No physical door was operated.')).not.toBeOnTheScreen();
+});
+
+test('Back and backdrop dismiss the confirmation without requesting an unlock', async () => {
+  const provider = createMockOpenpath();
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
+
+  await fireEvent(screen.getByTestId('app-modal'), 'requestClose');
+  await waitFor(() => expect(screen.queryByTestId('app-modal')).not.toBeOnTheScreen());
+  await fireEvent.press(screen.getByRole('button', { name: 'Unlock COE Door' }));
+  await fireEvent.press(await screen.findByTestId('modal-backdrop'));
+
+  await waitFor(() => expect(screen.queryByTestId('app-modal')).not.toBeOnTheScreen());
+  expect(provider.getUnlockRequests()).toEqual([]);
 });
 
 test('confirming unlock reports simulated acceptance and sends the discovered request', async () => {
   const provider = createMockOpenpath();
-  const nativeAlert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const Layout = () => <RootLayout provider={provider} />;
   await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
   await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
@@ -89,10 +104,8 @@ test('confirming unlock reports simulated acceptance and sends the discovered re
   await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
 
   expect(provider.getUnlockRequests()).toEqual([]);
-  expect(nativeAlert.mock.lastCall?.[1]).toContain('IFSS demo · Demo building · COE');
-  const unlock = nativeAlert.mock.lastCall?.[2]?.find((button) => button.text === 'Unlock');
-  expect(unlock).toBeDefined();
-  await act(async () => { unlock?.onPress?.(); });
+  expect(within(await screen.findByTestId('app-modal')).getByText('IFSS demo · Demo building · COE')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Unlock' }));
 
   expect(await screen.findByText('Simulated unlock accepted')).toBeOnTheScreen();
   expect(await screen.findByText('Simulated unlock accepted. No physical door was operated.')).toBeOnTheScreen();
@@ -132,16 +145,13 @@ test('an unlock failure shows a warning toast and preserves the uncertain result
     ...createMockOpenpath(),
     async unlockEntry() { throw new Error('Provider details should not be displayed.'); },
   };
-  const nativeAlert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const Layout = () => <RootLayout provider={provider} />;
   await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
   await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
   await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
-  const unlock = nativeAlert.mock.lastCall?.[2]?.find((button) => button.text === 'Unlock');
-  expect(unlock).toBeDefined();
-  await act(async () => { unlock?.onPress?.(); });
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock' }));
 
   await fireEvent.press(await screen.findByRole('button', { name: /Unlock result unconfirmed/ }));
 
@@ -299,16 +309,13 @@ test('a late unlock response after session expiry does not notify the signed-out
     await response;
     await base.unlockEntry(command);
   } };
-  const nativeAlert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const Layout = () => <RootLayout provider={provider} now={() => time} />;
   await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
   await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
   await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
-  const unlock = nativeAlert.mock.lastCall?.[2]?.find((button) => button.text === 'Unlock');
-  expect(unlock).toBeDefined();
-  await act(async () => { unlock?.onPress?.(); });
+  await fireEvent.press(await screen.findByRole('button', { name: 'Unlock' }));
   time = 2_700_000;
   await act(async () => { onChange?.('active'); });
   await waitFor(() => expect(screen).toHavePathname('/'));

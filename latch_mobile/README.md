@@ -19,9 +19,9 @@ For MFA, the first attempt reveals the code field. Re-enter the password with th
 
 The password starts hidden. Tap the eye icon to show or hide it; the entered value is preserved. The toggle is labelled **Show password** / **Hide password** for accessibility and is disabled during sign-in.
 
-Sign in to discover **COE Door (simulated)**. Tap **Unlock COE Door**, then choose **Cancel** or **Unlock** in the native confirmation. Confirmation shows **Simulated unlock accepted. No physical door was operated.** Sign out returns to the sign-in screen.
+Sign in to discover **COE Door (simulated)**. Tap **Unlock COE Door**, then choose **Cancel** or **Unlock** in the themed confirmation modal. Confirmation shows **Simulated unlock accepted. No physical door was operated.** Sign out returns to the sign-in screen.
 
-[Sonner Native](https://sonner-native.netlify.app/) relays sign-in errors, unavailable access, accepted unlock requests and unconfirmed results. Notifications match the system light/dark theme, disappear after five seconds, and can be tapped or swiped away. Error guidance and door outcomes also remain on screen after dismissal. Signing in or out clears previous session notifications. The unlock confirmation stays a native dialog; notifications never dispatch or retry an unlock.
+[Sonner Native](https://sonner-native.netlify.app/) relays sign-in errors, unavailable access, accepted unlock requests and unconfirmed results. Notifications match the system light/dark theme, disappear after five seconds, and can be tapped or swiped away. The full-width positioning wrapper keeps them horizontally centered; their card width is capped to the window's safe area and 480 dp. Error guidance and door outcomes remain on screen after dismissal. Signing in or out clears previous session notifications. Notifications never dispatch or retry an unlock.
 
 Do not enter real employee credentials. Only the documented dummy accounts are handled. The current composition always selects the in-process mock adapter; there is no live adapter, environment toggle or network fallback.
 
@@ -34,7 +34,9 @@ Do not enter real employee credentials. Only the documented dummy accounts are h
 
 All organisation/entry/credential IDs are confined to provider data. Tests change entry/credential IDs to verify that the Latch rules use discovery rather than app configuration. The mock adapter's request history records simulated commands for tests and contains no provider token.
 
-The current controls use React Native's accessible fields/actions and native Alert confirmation. Device-specific rendering and dialog behaviour still need Android verification; Jest substitutes the native Alert interface rather than displaying an operating-system dialog.
+The reusable `AppModal` accepts a title, body, actions and close callback. It uses a native modal window with a themed, rounded card and scrim, a 220 ms opacity/scale entrance and 160 ms exit on Reanimated's UI runtime. Reduced motion removes scaling. Content scrolls within safe-area bounds at large font sizes. Cancel, Android Back and tapping the backdrop dismiss without unlocking. Journey tests render the actual modal content; the native Back callback is exercised through the native modal interface.
+
+The clipped-toast screenshot traced to the tap-to-dismiss wrapper being centered without an explicit width around Sonner's absolutely positioned toast. The wrapper now stretches across the host, and the card has an explicit viewport-bounded width. Jest does not measure native Yoga geometry, so this fix and the modal's appearance/animation still need device visual verification.
 
 ## Session behaviour
 
@@ -96,7 +98,7 @@ Phase 2 continued at S1 and selected S4 journeys, one missing behaviour at a tim
 
 Additional journey checks exercise restart through the real SecureStore adapter with mocked native functions, verify passwords/codes are absent from its saved value, hold a provider check pending to verify the loading gate, and recover from a startup service outage without operating a door.
 
-**Latest automated result:** 2 suites, 41 tests passing; lint and typecheck passing. Notification tests render the actual Sonner component. Phase 2 adds SDK-compatible `expo-secure-store` and its config plugin. The Android production JavaScript/Hermes export also passes; this checks Metro compilation, not APK packaging or native runtime behaviour.
+**Latest automated result:** 2 suites, 42 tests passing; lint and typecheck passing. Notification tests render the actual Sonner component. Phase 2 adds SDK-compatible `expo-secure-store` and its config plugin. The Phase 2 Android production JavaScript/Hermes export passed; this checks Metro compilation, not APK packaging or native runtime behaviour.
 
 ## Evidence limits and next phases
 
