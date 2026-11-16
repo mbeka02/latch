@@ -164,17 +164,27 @@ test('the actual live journey offers TOTP up front and reports API acceptance wi
   expect(screen.queryByText(/MFA demo:/)).not.toBeOnTheScreen();
   expect(screen.queryByText(/Organisation and door choices:/)).not.toBeOnTheScreen();
   expect(screen.queryByText(/demo@latch/)).not.toBeOnTheScreen();
-  await fireEvent.press(screen.getByRole('button', { name: 'Use authenticator code' }));
   await fireEvent.changeText(screen.getByLabelText('Email'), 'employee@example.com');
   await fireEvent.changeText(screen.getByLabelText('Password'), 'fixture-password');
+  await fireEvent.press(screen.getByRole('button', { name: 'Use authenticator code' }));
+  expect(requests).toEqual([]);
+  expect(screen.queryByLabelText('Email')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Password')).not.toBeOnTheScreen();
+  await fireEvent.changeText(screen.getByLabelText('Authenticator code'), '000000');
+  await fireEvent.press(screen.getByRole('button', { name: 'Edit sign-in details' }));
+  expect(screen.getByLabelText('Email')).toHaveDisplayValue('employee@example.com');
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('fixture-password');
+  expect(screen.getByLabelText('Password')).toHaveProp('secureTextEntry', true);
+  await fireEvent.press(screen.getByRole('button', { name: 'Use authenticator code' }));
+  expect(screen.getByLabelText('Authenticator code')).toHaveDisplayValue('');
   await fireEvent.changeText(screen.getByLabelText('Authenticator code'), '654321');
-  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Verify and sign in' }));
   await fireEvent.press(await screen.findByRole('button', { name: 'Unlock COE Door' }));
   expect(screen.getByText('This requests a real door unlock using your Alta permissions.')).toBeOnTheScreen();
   await fireEvent.press(screen.getByRole('button', { name: 'Unlock' }));
   expect(await screen.findByText('Unlock request accepted. Door position has not been confirmed.')).toBeOnTheScreen();
   expect(requests.filter(({ path }) => path.endsWith('/cloudKeyEntryUnlock'))).toHaveLength(1);
-  expect(requests[0].body).toMatchObject({ mfa: { totpCode: '654321' } });
+  expect(requests[0].body).toMatchObject({ email: 'employee@example.com', password: 'fixture-password', mfa: { totpCode: '654321' } });
 });
 
 test('an explicitly live build without its native client cannot silently use the demo account', async () => {
@@ -238,6 +248,31 @@ test('the employee can show and hide their password without changing its value',
   expect(screen.getByLabelText('Password')).toHaveDisplayValue('latch-demo-only');
 });
 
+test('a pending sign-in preserves its password and a failed request leaves it available to correct', async () => {
+  let requests = 0;
+  let finish!: (response: { status: number; body: string }) => void;
+  const response = new Promise<{ status: number; body: string }>((resolve) => { finish = resolve; });
+  const provider = createOpenpath(async () => { requests++; return response; });
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'employee@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'draft-password');
+  await fireEvent.press(screen.getByRole('button', { name: 'Show password' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('draft-password');
+  expect(screen.getByLabelText('Password')).toHaveProp('secureTextEntry', true);
+  expect(screen.getByLabelText('Password')).toHaveProp('editable', false);
+  expect(screen.getByRole('button', { name: 'Signing in…', busy: true })).toBeDisabled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Signing in…' }));
+  expect(requests).toBe(1);
+  await act(async () => { finish({ status: 400, body: '{}' }); });
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Sign-in failed\./);
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('draft-password');
+  expect(screen.getByLabelText('Password')).toHaveProp('editable', true);
+  expect(screen.getByRole('button', { name: 'Sign in', busy: false })).toBeEnabled();
+});
+
 test('failed sign-in shows a toast and keeps recovery guidance on the form', async () => {
   await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
   await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
@@ -246,7 +281,7 @@ test('failed sign-in shows a toast and keeps recovery guidance on the form', asy
 
   expect(await screen.findByText('Unable to sign in')).toBeOnTheScreen();
   expect(screen.getByRole('alert')).toHaveTextContent('Sign-in failed. Check the demo account details.');
-  expect(screen.getByLabelText('Password')).toHaveDisplayValue('');
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('incorrect-password');
   expect(screen).toHavePathname('/');
 
   await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
@@ -685,15 +720,16 @@ test('the employee can complete demo MFA after correcting an invalid authenticat
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
 
   expect(await screen.findByLabelText('Authenticator code')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Password')).toHaveDisplayValue('');
-  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  expect(screen.getByRole('header', { name: 'Verify your sign-in' })).toBeOnTheScreen();
+  expect(screen.queryByLabelText('Email')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Password')).not.toBeOnTheScreen();
   await fireEvent.changeText(screen.getByLabelText('Authenticator code'), '000000');
-  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
-  expect(await screen.findByText('That authenticator code was not accepted. Enter your password and a new code.')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Verify and sign in' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('That authenticator code was not accepted. Enter a new code.');
   expect(screen.getByLabelText('Authenticator code')).toHaveDisplayValue('');
-  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  expect(screen.queryByLabelText('Password')).not.toBeOnTheScreen();
   await fireEvent.changeText(screen.getByLabelText('Authenticator code'), '123456');
-  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Verify and sign in' }));
 
   expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
   await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
@@ -722,15 +758,23 @@ test('returning to an expired session replaces the door screen with sign-in guid
   expect(screen.queryByRole('button', { name: /Unlock COE Door/ })).not.toBeOnTheScreen();
 });
 
-test('cancelling MFA clears the entered secrets and its obsolete notification', async () => {
-  await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+test('cancelling pending MFA clears its secrets and ignores the late successful response', async () => {
+  const base = createMockOpenpath();
+  let finish!: (session: ProviderSession) => void;
+  const response = new Promise<ProviderSession>((resolve) => { finish = resolve; });
+  const provider = { ...base, async login(input: Parameters<typeof base.login>[0]) {
+    return input.totpCode ? response : base.login(input);
+  } };
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
   await fireEvent.changeText(screen.getByLabelText('Email'), 'mfa@latch.example');
   await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await fireEvent.changeText(await screen.findByLabelText('Authenticator code'), '123456');
-  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
-
+  await fireEvent.press(screen.getByRole('button', { name: 'Verify and sign in' }));
+  expect(screen.getByRole('button', { name: 'Verifying…', busy: true })).toBeDisabled();
   await fireEvent.press(screen.getByRole('button', { name: 'Cancel sign-in' }));
+  await act(async () => { finish(await base.login({ email: 'mfa@latch.example', password: 'latch-demo-only', totpCode: '123456' })); });
 
   expect(screen.getByLabelText('Password')).toHaveDisplayValue('');
   expect(screen.queryByLabelText('Authenticator code')).not.toBeOnTheScreen();
@@ -753,8 +797,7 @@ test('a restart waits for a current provider check before restoring secure nativ
   await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await fireEvent.changeText(await screen.findByLabelText('Authenticator code'), '123456');
-  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
-  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Verify and sign in' }));
   expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
   const stored = nativeValues.get('latch.demo.session.v1');
   expect(stored).toBeDefined();

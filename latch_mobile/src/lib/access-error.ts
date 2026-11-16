@@ -6,8 +6,8 @@ export type AccessErrorCode =
 
 const messages: Record<AccessErrorCode, string> = {
   'invalid-credentials': 'Sign-in failed. Check your credentials and authenticator code, if required.',
-  'mfa-required': 'Enter your password again and the code from your authenticator.',
-  'mfa-invalid': 'That authenticator code was not accepted. Enter your password and a new code.',
+  'mfa-required': 'Enter the six-digit code from your authenticator app.',
+  'mfa-invalid': 'That authenticator code was not accepted. Enter a new code.',
   'unsupported-auth': 'This account requires a sign-in method Latch does not support. Use a supported native Alta account.',
   unavailable: 'The service is unavailable. Try again when your connection is restored.',
   expired: 'Your session has expired. Sign in again.',
