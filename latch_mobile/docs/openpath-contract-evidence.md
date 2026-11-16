@@ -18,6 +18,17 @@ Preview builds 2 and 3, the production Android transport, and the initial local 
 
 The earlier Helium `determineLoginCandidateNamespaces` response (`400`, `H-2102`, `Email not found`) and the displayed `ifss-group` label belong to the portal flow. They do not establish account deletion, a cache fault, or the public API's required namespace. Confirm any namespace nickname from the actual password-login payload or IFSS before changing it. Do not introduce the undocumented Helium endpoint into Latch on this evidence.
 
+### Subsequent browser capture: successful EU authentication
+
+The user's later preserved browser capture supplies stronger evidence, superseding speculation that the displayed organisation necessarily came from stale state:
+
+- `https://helium.prodeu1.openpath.com/cloudServerRegions` lists North America and Europe as distinct environments/endpoints (and other regions). This is observed portal behavior, not a public API integration contract.
+- US Helium email discovery returns `400` / `H-2102`; EU Helium discovery returns one matching identity and organisation namespace. The actual returned **nickname is `org:ifss-group`**, not the shorter display name `ifss-group`.
+- EU Helium `/auth/login` returns a non-empty token, matching identity/namespace context, expiry, and self-user read/write scopes. The token is intentionally excluded from these notes. The capture establishes that the EU browser flow can authenticate this identity; it does not establish portal access, a valid Cloud Key, Remote Unlock permission, or physical door access. Organisation subscription features in the response are not proof of this user's permissions.
+- The captured success response is structurally consistent with the fields the existing public-API adapter consumes. This does not prove endpoint interchangeability, request-field equivalence or the success of the subsequent profile/entry reads.
+
+The next controlled probe is the **documented EU public host** `api.eu.openpath.com`, `/auth/login`, with explicit `namespaceNickname: org:ifss-group`, preserving the user's password/MFA choices. The temporary helper supports `--region eu --namespace org:ifss-group --full-response`; a successful token remains hidden. This verifies the public-host path before changing the application's fixed origin/configuration. Do not forward the browser's captured token to other hosts or infer that Latch must adopt the portal's discovery endpoints. Preview 3 still uses the US public host and omits the namespace, so it does not match the observed EU namespace context.
+
 ## Native login
 
 `POST /auth/login` accepts JSON with required `email:string` (email format) and `password:string`; optional `namespaceId:integer` **or** `namespaceNickname:string` (1–255 characters), never both; optional `mfa:{totpCode:string}` (the object requires `totpCode`); and optional `forMobileLogin:boolean`. No semantics for `forMobileLogin` are documented. The guide specifies the current six-digit authenticator code in `mfa.totpCode`. [Login schema](https://openpath.readme.io/reference/login), [MFA guide](https://openpath.readme.io/docs/using-the-api)
