@@ -22,7 +22,7 @@
     },
     {
       "path": "../../src/components/inline-message.tsx",
-      "sha256": "ca4de764228da9408a7a38fe21afa5627869017896e4953246a561ec13fdf339"
+      "sha256": "98ded86eb02c53c2dac3ba6bf32710c374c1e97cfe308ca7ba1da931260ad17b"
     },
     {
       "path": "../../src/components/route-error.tsx",
@@ -56,7 +56,8 @@
       "Live MFA selection/edit makes no HTTP request; verification submits credentials and TOTP together",
       "Cancel pending MFA clears secrets and ignores late successful response",
       "Existing unlock, refresh, acknowledgement, expiry, storage recovery and screen-error journeys"
-    ]
+    ],
+    "note": "The 156-test result predates the border-only refinement. Lint and typecheck were rerun afterward; the behavior suite was not repeated for this styling change."
   },
   "native": {
     "status": "pending",

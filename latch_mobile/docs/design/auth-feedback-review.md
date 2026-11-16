@@ -14,7 +14,7 @@ The mock provider can explicitly request MFA and distinguish an invalid code. Li
 
 ## Feedback shared across screens
 
-- `InlineMessage` uses a semantic icon, selectable alert text in the existing bold font face, a tinted surface and an accent edge. Theme tokens provide readable red errors and amber warnings, avoiding a color-only distinction. Sign-in, session errors, door discovery failures, denied/not-sent unlock outcomes and screen recovery use this treatment. An unknown unlock remains a warning and still requires acknowledgement.
+- `InlineMessage` uses a semantic icon, selectable alert text in the existing bold font face and a tinted surface, with no accent border. Theme tokens provide readable red errors and amber warnings, avoiding a color-only distinction. Sign-in, session errors, door discovery failures, denied/not-sent unlock outcomes and screen recovery use this treatment. An unknown unlock remains a warning and still requires acknowledgement.
 - `ActionButton` now owns loading behavior: an in-button native spinner alongside the label, a disabled/busy accessibility state and no repeat activation. The compact door action uses the same component as the form/modal actions. Sign-in, MFA, unlock, acknowledgement, access retry, screen retry and the opt-in monitoring test supply their real pending state. Navigation and modal-opening actions remain immediate. Session restoration has a separate native progress indicator; pull-to-refresh retains RefreshControl.
 - Existing confirmation, one-request unlock policy, uncertain-result recovery, native origin and user-scoped permission rules are unchanged. No new dependency, service, build or deployment was introduced.
 

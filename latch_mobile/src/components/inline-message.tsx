@@ -12,7 +12,6 @@ export function InlineMessage({ children, tone = 'error' }: PropsWithChildren<{ 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two,
       padding: Spacing.three, borderRadius: AccessLayout.controlRadius,
-      borderLeftWidth: 3, borderLeftColor: color,
       backgroundColor: tone === 'error' ? theme.errorSurface : theme.warningSurface }}>
       <SymbolView name={{ ios: tone === 'error' ? 'exclamationmark.circle' : 'exclamationmark.triangle',
         android: tone === 'error' ? 'error_outline' : 'warning_amber',
