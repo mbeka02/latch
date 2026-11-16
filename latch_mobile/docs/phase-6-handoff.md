@@ -2,11 +2,23 @@
 
 Prepared 2026-11-16. The user selected a **live preview first**.
 
-## Pending EU source correction — hold the next build
+## Latest EU and UX preview — 1.0.0 (4)
+
+The user authorized a new live preview after merging the EU correction and UX refinements. EAS build [`1dbd4b5d-f010-426c-baa7-d553138897f7`](https://expo.dev/accounts/mbeka02/projects/latch/builds/1dbd4b5d-f010-426c-baa7-d553138897f7) **finished successfully** on 2026-11-16 at **17:52 Nairobi / 14:52 UTC**.
+
+- [Download Latch 1.0.0 (4)](https://expo.dev/artifacts/eas/Bq8o85GYl5NzR7xN41fohmavs6gPlBSJK_HclMTBWik.apk). Source commit `9b84f428608eadc854f7183e29a489d89c9c77a8`, live `preview` profile, existing remote signing key.
+- APK size **113,127,087 bytes**; SHA-256 `bfec5bab8e0973ec71d186a821f5d00ae48c947fac71d2163829c1db01a8a41d`.
+- APK Signature Scheme v2 verifies; certificate SHA-256 `63d52504a294a420a493ba2ae6d85656970cebcbddf07e863819d9aaa9c3260a` matches previews 2/3. Package `com.mbeka02.latch`, version `1.0.0` / code `4`, non-debuggable, `allowBackup=false`.
+- DEX contains the native transport and **`https://api.eu.openpath.com/`**, with the old exact US origin absent. Hermes contains **`org:ifss-group`**, the separate MFA step and safe diagnostic field names. This verifies packaging, not a real Android request or MFA response.
+- **156 tests / seven suites**, lint and typecheck passed immediately before upload. No app was installed/launched and no real login or unlock request was made by the agent.
+
+Install over the previous preview and sign in afresh: EU/namespace-scoped storage intentionally ignores legacy US sessions. The password/code, errors and loading flow changes are described in [UX notes](design/auth-feedback-review.md). Profile, COE discovery, own Cloud Key retrieval, live MFA and any supervised physical unlock still require phone/IFSS acceptance. Cloud logs confirm the dependency-insight tasks resolve OkHttp `4.9.2` and Okio `3.16.0`. Sentry source-map upload again failed with **Auth token is required**; the existing `SENTRY_ALLOW_FAILURE=true` allowed completion. Runtime receipt and readable stacks for release `com.mbeka02.latch@1.0.0+4` / dist `4` remain unverified. See [artifact evidence](apk-eu-preview-evidence.json). The older artifact sections below are historical.
+
+## Earlier EU source correction — build initially held
 
 The user subsequently verified **HTTP 201** from `https://api.eu.openpath.com/auth/login` with `namespaceNickname: org:ifss-group`, and requested applying the fix **without creating another build**. Current source now pins the native client to the EU host and supplies that exact namespace by default; the preview profile also explicitly includes it. Live session and attempt storage is partitioned by EU region and configured namespace, leaving legacy US records untouched and forcing fresh sign-in in the new context. No arbitrary-host selection, cross-region fallback, shared credentials or portal-discovery dependency was added.
 
-Checks: **155 JavaScript tests / seven suites**, lint, typecheck and **10 local JVM transport fixtures** passed. Two real Router regressions cover the configured live namespace request and refusal to hydrate a legacy US token. No APK, native app launch, emulator, dev server or EAS job was created for this correction. Further source changes and a future native build remain subject to the user's next steps. The existing downloads below still contain the old US configuration; they cannot acquire this native-origin correction through Metro.
+At that stage, **155 JavaScript tests / seven suites**, lint, typecheck and **10 local JVM transport fixtures** passed. Two real Router regressions cover the configured live namespace request and refusal to hydrate a legacy US token. No APK, native app launch, emulator, dev server or EAS job was created during that initial source-only correction. The user subsequently approved the preview 4 build documented above. The older downloads below retain the US configuration and cannot acquire this native-origin correction through Metro.
 
 The successful local probe establishes authentication only. Header-authenticated profile reads, COE discovery, own Cloud Key retrieval and supervised unlock/permission behavior still require testing in the corrected Android app.
 

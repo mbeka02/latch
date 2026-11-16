@@ -1,0 +1,68 @@
+{
+  "date": "2026-11-16",
+  "buildId": "1dbd4b5d-f010-426c-baa7-d553138897f7",
+  "sourceCommit": "9b84f428608eadc854f7183e29a489d89c9c77a8",
+  "buildStatus": "FINISHED",
+  "completedAtUtc": "2026-11-16T14:52:28.537Z",
+  "artifactUrl": "https://expo.dev/artifacts/eas/Bq8o85GYl5NzR7xN41fohmavs6gPlBSJK_HclMTBWik.apk",
+  "bytes": 113127087,
+  "sha256": "bfec5bab8e0973ec71d186a821f5d00ae48c947fac71d2163829c1db01a8a41d",
+  "application": {
+    "package": "com.mbeka02.latch",
+    "versionName": "1.0.0",
+    "versionCode": 4,
+    "debuggable": false,
+    "allowBackup": false
+  },
+  "signature": {
+    "verified": true,
+    "certificateSha256": "63d52504a294a420a493ba2ae6d85656970cebcbddf07e863819d9aaa9c3260a",
+    "matchesPreviousPreview": true,
+    "scheme": "v2"
+  },
+  "configuration": {
+    "profile": "preview",
+    "distribution": "internal",
+    "mode": "live",
+    "nativeOrigin": "https://api.eu.openpath.com/",
+    "namespaceNickname": "org:ifss-group"
+  },
+  "packaging": {
+    "euOriginInDex": true,
+    "legacyUsOriginInDex": false,
+    "nativeModuleNameInDex": true,
+    "exactNamespaceInHermesBundle": true,
+    "mfaStepInHermesBundle": true,
+    "diagnosticFieldsInHermesBundle": [
+      "latch.stage",
+      "http.response.status_code",
+      "latch.duration_ms",
+      "response-validation"
+    ]
+  },
+  "dependencies": {
+    "okhttp": "4.9.2",
+    "okio": "3.16.0",
+    "evidence": "Both EAS post-success dependencyInsight tasks completed with BUILD SUCCESSFUL"
+  },
+  "checks": {
+    "javascriptTests": 156,
+    "javascriptSuites": 7,
+    "lint": "pass",
+    "typecheck": "pass",
+    "timing": "Immediately before upload, exact source commit above"
+  },
+  "monitoring": {
+    "release": "com.mbeka02.latch@1.0.0+4",
+    "dist": "4",
+    "sourceMapUpload": "failed: Auth token is required; existing SENTRY_ALLOW_FAILURE allowed completion",
+    "runtimeReceiptVerified": false
+  },
+  "limitations": [
+    "No app was installed or launched by the agent; native layout, keyboard, autofill and accessibility need phone verification.",
+    "Packaged EU origin, namespace and MFA UI do not prove live authentication, profile/entry/Cloud Key access or door permission enforcement.",
+    "No real Alta login or unlock request was made by the agent. Any physical unlock requires an authorized onsite test.",
+    "A fresh sign-in is required because EU/namespace-scoped storage ignores legacy US sessions.",
+    "Runtime monitoring receipt, readable release stacks and native payload privacy remain unverified for preview 4."
+  ]
+}

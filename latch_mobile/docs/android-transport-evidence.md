@@ -2,11 +2,11 @@
 
 Checked 2026-11-15. Latch remains a direct Android public client. No backend, shared credential or integration service was introduced.
 
-## EU source correction — 2026-11-16, not built into an APK
+## EU source correction — 2026-11-16, packaged in preview 4
 
 After the user verified HTTP 201 from the public EU login endpoint with `namespaceNickname: org:ifss-group`, the production Java constructor was changed to pin **`https://api.eu.openpath.com/`** for every request. The namespace default and preview profile now match that verified configuration. Live SecureStore session/attempt records are scoped to EU and the configured namespace, preventing restoration of legacy US tokens. The native redirect, retry, TLS, route, cancellation and one-exchange policies are unchanged.
 
-All **10 JVM transport fixtures passed again** against the corrected production Java source; **155 JavaScript tests**, lint and typecheck also passed. The fixtures use local servers and do not establish live EU profile/door reads or Android runtime behavior. The user explicitly requested **no new APK/EAS build**; the existing preview APKs retain the US host. The earlier artifact evidence below remains historical evidence for those builds.
+All **10 JVM transport fixtures passed again** against the corrected production Java source; **155 JavaScript tests**, lint and typecheck also passed at that stage. The fixtures use local servers and do not establish live EU profile/door reads or Android runtime behavior. The user initially requested **no new APK/EAS build**, then approved the replacement after UX refinements. Preview **1.0.0 (4)** now packages the corrected EU origin and native module, confirmed by DEX inspection; its exact old US origin is absent. **156 JavaScript tests**, lint and typecheck passed before upload. Signature/manifest evidence is recorded in [preview 4 evidence](apk-eu-preview-evidence.json). Android runtime and tenant authorization checks remain pending; older artifact evidence below is historical.
 
 ## Why the local native module exists
 
