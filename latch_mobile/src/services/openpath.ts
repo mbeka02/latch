@@ -56,7 +56,11 @@ export function createOpenpath(transport: OpenpathTransport, options: { namespac
         return bad();
       }
       diagnostics.stage = 'response-validation';
-      return decode(response.body);
+      try { return decode(response.body); }
+      catch (error) {
+        if (error instanceof AccessError && error.code !== 'unavailable') throw error;
+        throw new AccessError('invalid-response');
+      }
     }, diagnostics);
   }
   async function profileSession(token: string, hints: SessionHints) {
@@ -76,10 +80,21 @@ export function createOpenpath(transport: OpenpathTransport, options: { namespac
         const email = text(identity.email);
         if (user && user.email !== email) return bad();
         user = { identityId: hints.identityId, email, name: text(identity.fullName ?? email) };
-        const associations = array(identity.users).map(object).filter((item) =>
-          item.id === userId && object(item.org).id === orgId);
-        if (associations.length !== 1) return bad();
-        memberships.push({ orgId, userId, organisation: text(object(associations[0].org).name) });
+        let org: Record<string, unknown>;
+        if (identity.users === undefined) {
+          // The observed EU own-user response omits this optional expansion.
+          // Namespace context is usable only for the exact login-derived org;
+          // it must never stand in for another organisation membership.
+          org = object(object(identity.namespace).org);
+          if (id(org.id) !== orgId) return bad();
+        } else {
+          // A present but malformed/contradictory expansion cannot be bypassed.
+          const associations = array(identity.users).map(object).filter((item) =>
+            item.id === userId && object(item.org).id === orgId);
+          if (associations.length !== 1) return bad();
+          org = object(associations[0].org);
+        }
+        memberships.push({ orgId, userId, organisation: text(org.name) });
       });
     }
     if (!user) return bad();

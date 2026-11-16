@@ -60,7 +60,7 @@ test('diagnostic logs retain the packaged release and fixed environment while re
 
 test('controlled operation errors and a unique verification marker remain identifiable', async () => {
   const options = monitoringOptions({ development: true, mode: 'demo' });
-  for (const message of ['Latch unlock failed: unavailable', 'Latch Sentry verification 1794762000000']) {
+  for (const message of ['Latch unlock failed: unavailable', 'Latch session-check failed: invalid-response', 'Latch Sentry verification 1794762000000']) {
     const outbound = await options.beforeSend!({ type: undefined, exception: { values: [{ type: 'Error', value: message }] } }, {});
     expect(outbound?.exception?.values?.[0].value).toBe(message);
   }

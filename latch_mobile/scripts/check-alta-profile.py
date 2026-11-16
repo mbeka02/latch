@@ -108,6 +108,16 @@ def validate_profile(response, identity_id, org_id, user_id, previous_email=None
         name = identity.get('fullName')
         check('data.identity.fullNameOrEmail', nonempty(email if name is None else name),
               'fullName is present but empty or has the wrong type; Latch only falls back for null/missing.')
+        if 'users' not in identity:
+            namespace = identity.get('namespace')
+            check('data.identity.namespace', isinstance(namespace, dict), 'Expected namespace context when identity.users is absent.')
+            org = namespace.get('org')
+            check('data.identity.namespace.org', isinstance(org, dict), 'Expected a namespace organisation object.')
+            check('data.identity.namespace.org.id', numeric_id(org.get('id')), 'Expected a positive safe integer organisation ID.')
+            check('data.identity.namespace.org.id.matchesLoginOrganisation', org['id'] == org_id,
+                  'Namespace organisation does not match the login-derived organisation; fallback is not allowed.')
+            check('data.identity.namespace.org.name', nonempty(org.get('name')), 'Expected a nonempty organisation name.')
+            return {'passed': True, 'organisationSource': 'identity.namespace.org', 'checks': checks}, email
         users = identity.get('users')
         check('data.identity.users', isinstance(users, list), 'Expected the identity.users array.')
         for index, item in enumerate(users):
@@ -124,7 +134,7 @@ def validate_profile(response, identity_id, org_id, user_id, previous_email=None
               'Expected exactly one association matching both login user ID and organisation ID.')
         check('data.identity.users.matchingAssociation.org.name', nonempty(matches[0].get('name')),
               'The matching organisation name is missing, null, empty or not a string.')
-        return {'passed': True, 'checks': checks}, email
+        return {'passed': True, 'organisationSource': 'identity.users', 'checks': checks}, email
     except InvalidProfile:
         return {'passed': False, 'failedAt': checks[-1]['field'], 'checks': checks}, previous_email
 

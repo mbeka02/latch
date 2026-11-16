@@ -149,7 +149,7 @@ test('the actual live journey offers TOTP up front and reports API acceptance wi
     if (request.path === '/auth/login') response = { data: { token: 'fixture-token', identityId: 17, identity: { id: 17 },
       tokenScopeList: [{ org: { id: 31, name: 'IFSS' }, user: { id: 42 } }] } };
     else if (request.path === '/orgs/31/users/42') response = { data: { id: 42, identity: { id: 17, email: 'employee@example.com',
-      users: [{ id: 42, org: { id: 31, name: 'IFSS' } }] } } };
+      namespace: { id: 8, org: { id: 31, name: 'IFSS' } } } } };
     else if (request.path.endsWith('/entries')) response = { filteredCount: 1, data: [
       { id: 90, name: 'COE Door', zone: { id: 8, name: 'COE', site: { id: 9, name: 'Main building' } } },
     ] };
@@ -185,6 +185,22 @@ test('the actual live journey offers TOTP up front and reports API acceptance wi
   expect(await screen.findByText('Unlock request accepted. Door position has not been confirmed.')).toBeOnTheScreen();
   expect(requests.filter(({ path }) => path.endsWith('/cloudKeyEntryUnlock'))).toHaveLength(1);
   expect(requests[0].body).toMatchObject({ email: 'employee@example.com', password: 'fixture-password', mfa: { totpCode: '654321' } });
+});
+
+test('a successful HTTP response with an unverifiable profile explains the data problem instead of a connection outage', async () => {
+  const provider = createOpenpath(async (request) => request.path === '/auth/login'
+    ? { status: 201, body: JSON.stringify({ data: { token: 'fixture-token', identityId: 17, identity: { id: 17 },
+      tokenScopeList: [{ org: { id: 31 }, user: { id: 42 } }] } }) }
+    : { status: 200, body: JSON.stringify({ data: { id: 42, identity: { id: 17, email: 'employee@example.com' } } }) });
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'employee@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'fixture-password');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Alta returned a response Latch could not verify. Try again or contact IFSS.');
+  expect(screen.getByLabelText('Password')).toHaveDisplayValue('fixture-password');
+  expect(screen.queryByRole('button', { name: 'Retry session check' })).not.toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: /Unlock COE Door/ })).not.toBeOnTheScreen();
 });
 
 test('an explicitly live build without its native client cannot silently use the demo account', async () => {

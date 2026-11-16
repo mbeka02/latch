@@ -43,12 +43,12 @@ test('a malformed successful login response reports validation failure rather th
   jest.mocked(Sentry.logger.error).mockClear();
   const http = fixture(json({ data: { token: 'fixture-jwt', identityId: 'unexpected' } }, 201));
   await expect(createOpenpath(http.transport).login({ email: 'employee@example.com', password: 'fixture-password' }))
-    .rejects.toMatchObject({ code: 'unavailable' });
+    .rejects.toMatchObject({ code: 'invalid-response' });
   expect(Sentry.logger.info).not.toHaveBeenCalledWith('Latch operation completed', expect.objectContaining({ 'latch.operation': 'login' }));
   const [message, attributes] = jest.mocked(Sentry.logger.error).mock.calls[0];
   const outbound = monitoringOptions({ development: false, mode: 'live' }).beforeSendLog!({ level: 'error', message: String(message), attributes });
   expect(outbound?.attributes).toMatchObject({ 'latch.operation': 'login', 'latch.result': 'failed',
-    'latch.stage': 'response-validation', 'http.response.status_code': 201, 'latch.error_code': 'unavailable' });
+    'latch.stage': 'response-validation', 'http.response.status_code': 201, 'latch.error_code': 'invalid-response' });
   expect(JSON.stringify(outbound)).not.toMatch(/fixture|employee@example|unexpected/);
   expect(http.requests).toHaveLength(1);
 });
@@ -67,6 +67,50 @@ test('documented native login and current profile produce a user-scoped session'
   ]);
 });
 
+// Sanitized from the observed EU response: identity.users is absent, while the
+// namespace contains the same organisation as the login-derived user context.
+const namespaceProfile = { data: { id: 42, status: 'A', hasRemoteUnlock: true,
+  identity: { id: 17, email: 'employee@example.com', fullName: 'Test employee',
+    namespace: { id: 8, namespaceType: 'org', nickname: 'org:fixture', org: { id: 31, name: 'IFSS' } } } } };
+
+test('the observed EU profile without identity.users supports login and header-authenticated restoration', async () => {
+  const http = fixture(json(login, 201), json(namespaceProfile), json(namespaceProfile));
+  const provider = createOpenpath(http.transport);
+  const signedIn = await provider.login({ email: 'employee@example.com', password: 'private-password' });
+  expect(signedIn).toMatchObject({ user: { identityId: '17', email: 'employee@example.com' },
+    memberships: [{ orgId: 31, userId: 42, organisation: 'IFSS' }] });
+  await expect(provider.checkSession(signedIn.token, { identityId: '17', associations: [{ orgId: 31, userId: 42 }] }))
+    .resolves.toMatchObject({ user: signedIn.user, memberships: signedIn.memberships });
+  expect(http.requests.map(({ path }) => path)).toEqual(['/auth/login', '/orgs/31/users/42', '/orgs/31/users/42']);
+});
+
+test.each([
+  ['another organisation', { ...namespaceProfile.data.identity, namespace: { org: { id: 99, name: 'Other organisation' } } }],
+  ['a string organisation ID', { ...namespaceProfile.data.identity, namespace: { org: { id: '31', name: 'IFSS' } } }],
+  ['a missing organisation name', { ...namespaceProfile.data.identity, namespace: { org: { id: 31 } } }],
+  ['an empty organisation name', { ...namespaceProfile.data.identity, namespace: { org: { id: 31, name: ' ' } } }],
+  ['a missing namespace', { id: 17, email: 'employee@example.com' }],
+  ['a malformed explicit association list', { ...namespaceProfile.data.identity, users: null }],
+  ['an empty explicit association list', { ...namespaceProfile.data.identity, users: [] }],
+  ['a contradictory explicit association', { ...namespaceProfile.data.identity, users: [{ id: 42, org: { id: 99, name: 'Other organisation' } }] }],
+  ['duplicate matching associations', { ...namespaceProfile.data.identity, users: [profile.data.identity.users[0], profile.data.identity.users[0]] }],
+])('namespace context cannot bypass %s', async (_description, identity) => {
+  const http = fixture(json({ data: { ...namespaceProfile.data, identity } }));
+  await expect(createOpenpath(http.transport).checkSession('fixture-jwt', {
+    identityId: '17', associations: [{ orgId: 31, userId: 42 }],
+  })).rejects.toMatchObject({ code: 'invalid-response' });
+  expect(http.requests).toHaveLength(1);
+});
+
+test.each([
+  { ...namespaceProfile, data: { ...namespaceProfile.data, id: 99 } },
+  { ...namespaceProfile, data: { ...namespaceProfile.data, identity: { ...namespaceProfile.data.identity, id: 99 } } },
+])('namespace fallback never restores a different user or identity (%#)', async (body) => {
+  await expect(createOpenpath(fixture(json(body)).transport).checkSession('fixture-jwt', {
+    identityId: '17', associations: [{ orgId: 31, userId: 42 }],
+  })).rejects.toMatchObject({ code: 'expired' });
+});
+
 test.each([
   { ...login, data: { ...login.data, token: '' } },
   { ...login, data: { ...login.data, identityId: 18 } },
@@ -75,7 +119,7 @@ test.each([
 ])('incomplete or contradictory login data never yields a session (%#)', async (body) => {
   const http = fixture(json(body, 201), json(profile));
   await expect(createOpenpath(http.transport).login({ email: 'employee@example.com', password: 'private' }))
-    .rejects.toMatchObject({ code: 'unavailable' });
+    .rejects.toMatchObject({ code: 'invalid-response' });
 });
 
 test('native TOTP and a configured namespace use the documented fields without forMobileLogin guesses', async () => {
@@ -138,7 +182,7 @@ test.each([
   { id: 71, cloudKey: { id: 701 }, startDate: 'unknown' },
 ])('malformed or contradictory credentials never become a usable Cloud Key (%#)', async (value) => {
   await expect(createOpenpath(fixture(json({ data: [value] })).transport).listCredentials(context, 0))
-    .rejects.toMatchObject({ code: 'unavailable' });
+    .rejects.toMatchObject({ code: 'invalid-response' });
 });
 
 test('unlock posts a numeric entry ID with the outer credential ID and accepts empty 204 without JSON parsing', async () => {
@@ -170,7 +214,7 @@ test.each([
   { ...entries, data: [...entries.data, ...entries.data], totalCount: 2, filteredCount: 2 },
 ])('discovery rejects partial, uncounted or duplicate entry results (%#)', async (body) => {
   await expect(createOpenpath(fixture(json(body)).transport).listUserEntries(context))
-    .rejects.toMatchObject({ code: 'unavailable' });
+    .rejects.toMatchObject({ code: 'invalid-response' });
 });
 
 test('the real session service persists only association hints and restores through the HTTP adapter', async () => {
@@ -217,5 +261,5 @@ test.each([401, 403, 500])('the real door service preserves expired, denied and 
 
 test('credential traversal cannot report exhaustion while the response count says credentials are missing', async () => {
   await expect(createOpenpath(fixture(json({ filteredCount: 3, data: [] })).transport).listCredentials(context, 2))
-    .rejects.toMatchObject({ code: 'unavailable' });
+    .rejects.toMatchObject({ code: 'invalid-response' });
 });

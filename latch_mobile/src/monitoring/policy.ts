@@ -6,7 +6,7 @@ export type MonitoredOperation = typeof operations[number];
 const safeNames = new Set(operations.map((operation) => `latch.${operation}`));
 function name(value?: string) { return value && safeNames.has(value) ? value : 'navigation'; }
 function errorMessage(value?: string) {
-  return value && (/^Latch (login|session-check|entries|credentials|unlock) failed: (unavailable|storage|attempt-storage|request-not-sent)$/.test(value) ||
+  return value && (/^Latch (login|session-check|entries|credentials|unlock) failed: (unavailable|invalid-response|storage|attempt-storage|request-not-sent)$/.test(value) ||
     /^Latch Sentry verification \d{13}$/.test(value)) ? value : 'Application error (message omitted)';
 }
 function attributes(value: Record<string, unknown> = {}) {
@@ -18,7 +18,7 @@ function attributes(value: Record<string, unknown> = {}) {
   if (typeof value['latch.stage'] === 'string' && ['transport', 'timeout', 'response-status', 'response-validation'].includes(value['latch.stage']))
     safe['latch.stage'] = value['latch.stage'];
   if (typeof value['latch.error_code'] === 'string' && ['invalid-credentials', 'mfa-required', 'mfa-invalid', 'unsupported-auth', 'access-denied', 'expired',
-    'unavailable', 'storage', 'attempt-storage', 'request-not-sent'].includes(value['latch.error_code']))
+    'unavailable', 'invalid-response', 'storage', 'attempt-storage', 'request-not-sent'].includes(value['latch.error_code']))
     safe['latch.error_code'] = value['latch.error_code'];
   const status = value['http.response.status_code'];
   if (typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599)

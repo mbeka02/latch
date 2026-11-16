@@ -1,6 +1,6 @@
 export type AccessErrorCode =
   | 'invalid-credentials' | 'mfa-required' | 'mfa-invalid' | 'unsupported-auth'
-  | 'unavailable' | 'expired' | 'storage' | 'stale-operation' | 'access-denied' | 'entry-not-found'
+  | 'unavailable' | 'invalid-response' | 'expired' | 'storage' | 'stale-operation' | 'access-denied' | 'entry-not-found'
   | 'organisation-required' | 'organisation-unavailable' | 'ambiguous-entry' | 'credential-unavailable' | 'access-changed'
   | 'acknowledgement-required' | 'unlock-pending' | 'cooldown' | 'attempt-storage' | 'request-not-sent';
 
@@ -10,6 +10,7 @@ const messages: Record<AccessErrorCode, string> = {
   'mfa-invalid': 'That authenticator code was not accepted. Enter a new code.',
   'unsupported-auth': 'This account requires a sign-in method Latch does not support. Use a supported native Alta account.',
   unavailable: 'The service is unavailable. Try again when your connection is restored.',
+  'invalid-response': 'Alta returned a response Latch could not verify. Try again or contact IFSS.',
   expired: 'Your session has expired. Sign in again.',
   storage: 'Secure session storage is unavailable. Try signing in again.',
   'stale-operation': 'This operation belongs to a previous session.',
