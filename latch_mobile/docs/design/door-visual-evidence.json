@@ -1,16 +1,16 @@
 {
   "schemaVersion": "uizze.visual-evidence.v1",
-  "scope": "Compact Latch door identity rows and multiple-door picker; retain top Account and existing confirmation flow",
+  "scope": "Compact Latch door identity rows and multiple-door picker; retain top Account and existing confirmation flow; COE-only pull-to-refresh with retained content and explicit error retry",
   "platform": "android",
   "comparison": "existing-system",
   "sources": [
     {
       "path": "../../src/app/door.tsx",
-      "sha256": "1faa30f3a0b3669942677ad3897aa551f4523098ab82de1084b5621f43d19a48"
+      "sha256": "b779248335a84337a6c0f8e9630c970f9844f6f3280bc27b40bdbeaae7dfdea7"
     },
     {
       "path": "../../src/components/access-screen.tsx",
-      "sha256": "587e57c2383b36d3d82e24159d8a20498c9ad25c7c628b8024d5b8b678201dea"
+      "sha256": "97c6aa06d6ed023efe90f33a7f466cf8156d287ec42d65905cf76385d7fd0870"
     },
     {
       "path": "../../src/components/app-modal.tsx",
@@ -53,6 +53,10 @@
     {
       "id": "account-motion",
       "kind": "motion"
+    },
+    {
+      "id": "door-pull-refresh",
+      "kind": "interaction"
     }
   ],
   "checks": [
@@ -120,10 +124,31 @@
         "height": 780
       },
       "artifacts": []
+    },
+    {
+      "id": "door-pull-refresh",
+      "kind": "interaction",
+      "state": "Ready single-door, multiple COE choices, unavailable and unresolved-result states; light/dark; short and scrollable content",
+      "steps": [
+        "Pull down from the top and inspect native spinner position, theme and completion.",
+        "Repeat while viewing a selected South building door; verify content and selection remain.",
+        "Exercise failed discovery followed by Try again or another pull; confirm no unlock is sent.",
+        "Check refresh is blocked during a confirmation/pending unlock and preserves unresolved-result warnings."
+      ],
+      "status": "blocked",
+      "observed": "Native swipe and spinner inspection pending on a phone. Router tests cover the real JS refresh callback and service behavior, not physical gesture recognition or native layout.",
+      "environment": {
+        "kind": "device",
+        "name": "Pending Android phone check",
+        "width": 360,
+        "height": 780
+      },
+      "artifacts": []
     }
   ],
   "unresolved": [
-    "Phone inspection of compact row density, action wrapping, long content, focus and dialog animation remains pending."
+    "Phone inspection of compact row density, action wrapping, long content, focus and dialog animation remains pending.",
+    "Native pull gesture, refresh indicator placement and theme checks remain pending on a phone."
   ],
   "baseline": {
     "path": "door-before-compact.png",
