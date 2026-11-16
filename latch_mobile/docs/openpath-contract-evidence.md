@@ -4,6 +4,16 @@ Checked **2026-11-15** against official public Openpath ReadMe pages and the Ope
 
 The assessment targets the intended evaluator's supported native account. General portal-disabled employee eligibility is outside this phase's gate. Tenant authorization and Android transport behavior still require their own evidence; schema checks establish neither.
 
+## Regional host investigation — 2026-11-16
+
+The user's portal returns to `https://access.eu.alta.avigilon.com/signin?hasPortalAccess=false`. The route flag expresses the portal's access decision, not an HTTP status or proof of the exact password-login result. A browser application can make a successful HTTP request and then navigate to this route based on response data; a red Network row is not required for a portal denial.
+
+The [Avigilon Alta Access Administrator Guide](https://www.avigilon.com/fs/documents/avigilon-alta-access-administrator-guide-en.pdf), printed page 131 (PDF page index 130), explicitly lists `https://api.openpath.com` for US users and `https://api.eu.openpath.com` for EU users as region base URLs. Current [SCIM integration documentation](https://docs.avigilon.com/bundle/alta-access-identity-management-integrations/page/integrations/okta/okta-scim-sync.htm) also distinguishes these two regional API hosts. These sources establish the documented EU host; they do not by themselves verify this user's `/auth/login` eligibility or response.
+
+Preview builds 2 and 3, the production Android transport, and the initial local diagnostic probe use the US host. The European portal URL therefore reveals a concrete regional mismatch hypothesis that was missed during the initial diagnosis. The temporary probe now accepts explicit `--region us|eu` using only the two documented fixed hosts, with no fallback, redirects or retries. Its next useful manual run is EU with the same credentials/MFA/namespace choices as the previous US attempt, isolating the region variable. No credentials have been supplied to the agent and no live login request has been made by the agent. The application host remains unchanged pending that result.
+
+The earlier Helium `determineLoginCandidateNamespaces` response (`400`, `H-2102`, `Email not found`) and the displayed `ifss-group` label belong to the portal flow. They do not establish account deletion, a cache fault, or the public API's required namespace. Confirm any namespace nickname from the actual password-login payload or IFSS before changing it. Do not introduce the undocumented Helium endpoint into Latch on this evidence.
+
 ## Native login
 
 `POST /auth/login` accepts JSON with required `email:string` (email format) and `password:string`; optional `namespaceId:integer` **or** `namespaceNickname:string` (1–255 characters), never both; optional `mfa:{totpCode:string}` (the object requires `totpCode`); and optional `forMobileLogin:boolean`. No semantics for `forMobileLogin` are documented. The guide specifies the current six-digit authenticator code in `mfa.totpCode`. [Login schema](https://openpath.readme.io/reference/login), [MFA guide](https://openpath.readme.io/docs/using-the-api)
