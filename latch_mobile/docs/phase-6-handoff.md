@@ -2,7 +2,19 @@
 
 Prepared 2026-11-16. The user selected a **live preview first**.
 
-## Delivery status
+## Latest diagnostics preview
+
+The replacement live preview **1.0.0 (3)** finished successfully on 2026-11-16. Install it over the original preview and retry sign-in to inspect the new diagnostic fields; Expo Go does not include the custom live transport. Metro is stopped.
+
+- [Download the replacement APK](https://expo.dev/artifacts/eas/TSzvftu4AIHtISV0SsjCZ1lj20PkvYyUr-ie3Vfqpjc.apk) · [EAS build `a4a32b60-bf6b-4843-bc03-51397ca68e35`](https://expo.dev/accounts/mbeka02/projects/latch/builds/a4a32b60-bf6b-4843-bc03-51397ca68e35).
+- Source commit `5825356`; diagnostics fix `83593a0`. APK size **113,122,631 bytes**; SHA-256 `d2d61839b730e147755a65751f0251831623f0314bee7912798c9ce5da3cf07a`.
+- Signature verified and certificate matches the original APK. Package/version `com.mbeka02.latch` / `1.0.0` (`3`), non-debuggable and `allowBackup=false`. Packaged Hermes strings include the new diagnostic fields; DEX contains the native transport module name. The release dependency-insight tasks again resolve OkHttp `4.9.2` and Okio `3.16.0`.
+- **153 tests / seven suites**, lint and typecheck passed. Existing auth denials were received in Sentry, but the new APK's diagnostic delivery requires a fresh phone attempt. No new real Alta request or physical door operation was made by the agent.
+- Sentry source-map upload still failed because the build token is absent. Task release/dist are `com.mbeka02.latch@1.0.0+3` / `3`; readable release stacks and native payload privacy remain unverified.
+
+See [diagnostics artifact evidence](apk-diagnostics-evidence.json) and [sign-in investigation / Logs instructions](sentry-monitoring.md#investigating-sign-in-failures). The original preview's evidence and outstanding acceptance checklist are retained below; original artifact details refer to version code **2**.
+
+## Original preview delivery status
 
 The `preview` profile produces an internally distributed, signed **release APK**. It is not an Expo Go/development-client build and does not require Metro, a Latch backend or an evaluator-managed deployment. It connects directly to Alta; it cannot fall back to demo accounts.
 

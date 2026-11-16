@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-16",
+  "buildId": "a4a32b60-bf6b-4843-bc03-51397ca68e35",
+  "sourceCommit": "5825356b410be6cc6524d772a2bb93f98816920d",
+  "buildStatus": "FINISHED",
+  "artifactUrl": "https://expo.dev/artifacts/eas/TSzvftu4AIHtISV0SsjCZ1lj20PkvYyUr-ie3Vfqpjc.apk",
+  "bytes": 113122631,
+  "sha256": "d2d61839b730e147755a65751f0251831623f0314bee7912798c9ce5da3cf07a",
+  "application": {
+    "package": "com.mbeka02.latch",
+    "versionName": "1.0.0",
+    "versionCode": 3,
+    "debuggable": false,
+    "allowBackup": false
+  },
+  "signature": {
+    "verified": true,
+    "certificateSha256": "63d52504a294a420a493ba2ae6d85656970cebcbddf07e863819d9aaa9c3260a",
+    "matchesPreviousPreview": true
+  },
+  "packaging": {
+    "diagnosticFieldsInHermesBundle": [
+      "latch.stage",
+      "latch.error_code",
+      "http.response.status_code",
+      "latch.duration_ms",
+      "response-validation"
+    ],
+    "nativeModuleNameInDex": true
+  },
+  "dependencies": {
+    "okhttp": "4.9.2",
+    "okio": "3.16.0",
+    "evidence": "Both EAS post-success dependencyInsight tasks passed"
+  },
+  "checks": {
+    "javascriptTests": 153,
+    "javascriptSuites": 7,
+    "lint": "pass",
+    "typecheck": "pass"
+  },
+  "monitoring": {
+    "release": "com.mbeka02.latch@1.0.0+3",
+    "dist": "3",
+    "sourceMapUpload": "failed: build auth token absent; SENTRY_ALLOW_FAILURE allowed build completion",
+    "newDiagnosticLogReceiptVerified": false
+  },
+  "limitations": [
+    "New APK installation and runtime diagnostic delivery require a fresh user attempt.",
+    "Existing login warnings establish HTTP rejection, not its account-specific cause.",
+    "Native payload privacy and readable release stacks remain unverified."
+  ]
+}
