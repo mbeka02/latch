@@ -65,6 +65,10 @@ The agent can then use the authenticated CLI to find that exact issue in `mbeka0
 
 ## Production build and source maps
 
+### Preview 6 cloud upload verified — 2026-11-16
+
+The requested live preview build `425c5958-102a-49ec-b24f-7e696e3efff9` finished successfully. Its native source-map task confirms **Uploaded files to Sentry** for release `com.mbeka02.latch@1.0.0+6`, dist `6`, artifact bundle `61d9d7de-e905-52cd-9eb6-3abedf3275b0` and debug ID `152f57ba-f836-4c1a-8e6b-f10736a0675d`. This verifies authenticated automatic cloud upload with failures no longer ignored. The task reported processing pending on the server; a fresh received preview 6 event and readable stack have not been inspected. Native payload privacy remains unverified. Earlier missing-map evidence below applies to those older builds.
+
 ### Upload authentication configured — 2026-11-16
 
 Created a dedicated Sentry organization CI token named `latch-eas-preview` with `org:ci` scope and stored it as the project-scoped EAS **secret** `SENTRY_AUTH_TOKEN`, available only in the **preview** environment. The token is not in this repository or application configuration. Keep it build-only; other build environments need their own explicit configuration.

@@ -2,9 +2,21 @@
 
 Prepared 2026-11-16. The user selected a **live preview first**.
 
-**Subsequent source-map setup:** EAS preview now has a dedicated build-only `SENTRY_AUTH_TOKEN` secret. The preview profile no longer allows Sentry upload failures. An older local Android Hermes export was uploaded and server processing verified; no replacement APK was built and no matching release stack was verified. See [monitoring evidence](sentry-monitoring.md#upload-authentication-configured--2026-11-16). The empty, untracked `latch_backend` folder was removed; Latch continues to call Alta directly.
+**Subsequent source-map setup:** EAS preview now has a dedicated build-only `SENTRY_AUTH_TOKEN` secret. The preview profile no longer allows Sentry upload failures. An older local Android Hermes export was initially uploaded and server processing verified; preview 6 below subsequently verified automatic cloud upload. A matching runtime release stack remains unverified. See [monitoring evidence](sentry-monitoring.md#upload-authentication-configured--2026-11-16). The empty, untracked `latch_backend` folder was removed; Latch continues to call Alta directly.
 
-## Latest profile-compatible preview — 1.0.0 (5)
+## Latest live preview — 1.0.0 (6)
+
+EAS build [`425c5958-102a-49ec-b24f-7e696e3efff9`](https://expo.dev/accounts/mbeka02/projects/latch/builds/425c5958-102a-49ec-b24f-7e696e3efff9) **finished successfully** on 2026-11-16 at **21:11 Nairobi / 18:11 UTC**, from source commit `af76e47a5731f27293ec9bd8847cebc90f8563c8`.
+
+[Download Latch 1.0.0 (6), live APK](https://expo.dev/artifacts/eas/5ePFlsyJsf-wv8EK-qsKNTfRcwwK9p_7WPUFAQVAMWo.apk).
+
+The cloud log confirms **Uploaded files to Sentry** for release `com.mbeka02.latch@1.0.0+6`, dist `6`, artifact bundle `61d9d7de-e905-52cd-9eb6-3abedf3275b0`, debug ID `152f57ba-f836-4c1a-8e6b-f10736a0675d`. Unlike earlier previews, the upload ran with build authentication and without `SENTRY_ALLOW_FAILURE`. The upload task reports server processing pending; a received release event with readable frames remains a separate runtime check. Both post-success dependency-insight tasks completed successfully with OkHttp `4.9.2` and Okio `3.16.0`.
+
+APK inspection verifies package `com.mbeka02.latch`, version `1.0.0` / code `6`, non-debuggable, backup disabled, and the same verified v2 signing certificate as previous previews. The EU origin, native transport, IFSS namespace and current MFA/error UI are packaged; the exact legacy US origin is absent. Size **113,127,663 bytes**; SHA-256 `eeadefa64ed6956d96277a1ae45a9e62766cae1bd6fbd79323635855db878f0b`. Lint and typecheck passed; app tests were not repeated for this build-only verification. See [artifact evidence](apk-final-preview-evidence.json).
+
+Preview 5 phone sign-in succeeded; the subsequent local diagnostic returned HTTP 200 with zero entries, consistent with the displayed unavailable-access state. It does not establish why this account has no entries. COE discovery with a suitably authorised IFSS account, Cloud Key eligibility and supervised physical unlocking still require IFSS acceptance. No app launch or real Alta operation was performed by the agent for preview 6.
+
+## Earlier profile-compatible preview — 1.0.0 (5)
 
 EAS build [`9779f600-bba3-423a-a1ed-b68dfd71245e`](https://expo.dev/accounts/mbeka02/projects/latch/builds/9779f600-bba3-423a-a1ed-b68dfd71245e) **finished successfully** on 2026-11-16 at **19:28 Nairobi / 16:28 UTC**. [Download Latch 1.0.0 (5)](https://expo.dev/artifacts/eas/GFGhv_b3mtd6F43HoLwCZiXmiDJ3XhkR-59Wy9IQycY.apk).
 

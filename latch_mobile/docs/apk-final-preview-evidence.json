@@ -1,0 +1,71 @@
+{
+  "date": "2026-11-16",
+  "buildId": "425c5958-102a-49ec-b24f-7e696e3efff9",
+  "sourceCommit": "af76e47a5731f27293ec9bd8847cebc90f8563c8",
+  "buildStatus": "FINISHED",
+  "completedAtUtc": "2026-11-16T18:11:03.947Z",
+  "artifactUrl": "https://expo.dev/artifacts/eas/5ePFlsyJsf-wv8EK-qsKNTfRcwwK9p_7WPUFAQVAMWo.apk",
+  "bytes": 113127663,
+  "sha256": "eeadefa64ed6956d96277a1ae45a9e62766cae1bd6fbd79323635855db878f0b",
+  "application": {
+    "package": "com.mbeka02.latch",
+    "versionName": "1.0.0",
+    "versionCode": 6,
+    "debuggable": false,
+    "allowBackup": false
+  },
+  "signature": {
+    "verified": true,
+    "certificateSha256": "63d52504a294a420a493ba2ae6d85656970cebcbddf07e863819d9aaa9c3260a",
+    "matchesPreviousPreview": true,
+    "scheme": "v2"
+  },
+  "configuration": {
+    "profile": "preview",
+    "distribution": "internal",
+    "mode": "live",
+    "nativeOrigin": "https://api.eu.openpath.com/",
+    "namespaceNickname": "org:ifss-group"
+  },
+  "packaging": {
+    "euOriginInDex": true,
+    "legacyUsOriginInDex": false,
+    "nativeModuleNameInDex": true,
+    "exactNamespaceInHermesBundle": true,
+    "mfaStepInHermesBundle": true,
+    "invalidResponseClassificationInHermesBundle": true,
+    "invalidResponseGuidanceInHermesBundle": true,
+    "diagnosticFieldsInHermesBundle": [
+      "latch.stage",
+      "http.response.status_code",
+      "latch.duration_ms",
+      "response-validation"
+    ]
+  },
+  "dependencies": {
+    "okhttp": "4.9.2",
+    "okio": "3.16.0",
+    "evidence": "Both EAS post-success dependencyInsight tasks completed with BUILD SUCCESSFUL"
+  },
+  "checks": {
+    "lint": "pass",
+    "typecheck": "pass",
+    "javascriptTests": "Not rerun for this build-only verification; runtime source unchanged from preview 5"
+  },
+  "monitoring": {
+    "release": "com.mbeka02.latch@1.0.0+6",
+    "dist": "6",
+    "sourceMapUpload": "Cloud log confirms Uploaded files to Sentry; processing pending on server at task completion",
+    "artifactBundleId": "61d9d7de-e905-52cd-9eb6-3abedf3275b0",
+    "debugId": "152f57ba-f836-4c1a-8e6b-f10736a0675d",
+    "uploadFailuresAllowed": false,
+    "runtimeReceiptVerified": false,
+    "readableReleaseStackVerified": false
+  },
+  "limitations": [
+    "No app installed or launched by the agent for preview 6.",
+    "No real Alta login or unlock performed by the agent.",
+    "Authorised IFSS account discovery, Cloud Key eligibility and supervised physical unlock remain acceptance checks.",
+    "Native payload privacy and readable release stacks remain unverified."
+  ]
+}

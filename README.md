@@ -88,6 +88,8 @@ Select a door if prompted, tap **Unlock**, then confirm. Pull down to refresh ac
 
 ## Build a live APK
 
+**[Download live preview 1.0.0 (6)](https://expo.dev/artifacts/eas/5ePFlsyJsf-wv8EK-qsKNTfRcwwK9p_7WPUFAQVAMWo.apk)** to try the app without a development setup.
+
 From `latch_mobile`, with your changes committed:
 
 ```sh
