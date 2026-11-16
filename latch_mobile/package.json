@@ -48,7 +48,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest --runInBand",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eas-build-on-success": "cd android && ./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency com.squareup.okhttp3:okhttp && ./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency com.squareup.okio:okio"
   },
   "private": true,
   "allowScripts": {

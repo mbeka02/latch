@@ -11,6 +11,8 @@
       "icon": "./assets/branding/icon.png"
     },
     "android": {
+      "package": "com.mbeka02.latch",
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#111111",
         "foregroundImage": "./assets/branding/adaptive-foreground.png",
