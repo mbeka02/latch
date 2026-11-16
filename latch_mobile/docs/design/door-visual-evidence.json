@@ -1,17 +1,12 @@
 {
   "schemaVersion": "uizze.visual-evidence.v1",
-  "scope": "Latch door screen and top Account entry point; generated target 1016x1548 px",
+  "scope": "Compact Latch door identity rows and multiple-door picker; retain top Account and existing confirmation flow",
   "platform": "android",
-  "comparison": "target",
-  "target": {
-    "path": "door-target.png",
-    "kind": "image",
-    "sha256": "56161a2c8ba1835d7fd3f946c04bfe5cc457de77700ab73f02911c1b77d361e6"
-  },
+  "comparison": "existing-system",
   "sources": [
     {
       "path": "../../src/app/door.tsx",
-      "sha256": "84f7cbbacda1a605339aef4829cd5092b7c27369f23033d986b8980c77b27014"
+      "sha256": "1faa30f3a0b3669942677ad3897aa551f4523098ab82de1084b5621f43d19a48"
     },
     {
       "path": "../../src/components/access-screen.tsx",
@@ -44,6 +39,10 @@
   ],
   "requiredChecks": [
     {
+      "id": "door-compact-rows",
+      "kind": "visual"
+    },
+    {
       "id": "door-themes",
       "kind": "visual"
     },
@@ -57,6 +56,20 @@
     }
   ],
   "checks": [
+    {
+      "id": "door-compact-rows",
+      "kind": "visual",
+      "state": "Single-door identity/action row and North/South picker; 320 dp and 360 dp widths; long names and large system text",
+      "status": "blocked",
+      "observed": "Pending native phone inspection. Wrapping layout and contextual accessibility labels are implemented; automated Router tests and Android bundle export do not verify native geometry.",
+      "environment": {
+        "kind": "device",
+        "name": "Pending Android phone check",
+        "width": 360,
+        "height": 780
+      },
+      "artifacts": []
+    },
     {
       "id": "door-themes",
       "kind": "visual",
@@ -110,6 +123,14 @@
     }
   ],
   "unresolved": [
-    "Phone layout, long content, focus and dialog animation remain pending."
-  ]
+    "Phone inspection of compact row density, action wrapping, long content, focus and dialog animation remains pending."
+  ],
+  "baseline": {
+    "path": "door-before-compact.png",
+    "kind": "image",
+    "sha256": "18ff9627b8d2828026629d3acfa55327fdad233e7c85110f55c6576e669536ea",
+    "width": 720,
+    "height": 1560,
+    "observed": "User-supplied phone screenshot of the previous oversized panel; baseline only, not a capture of this revision."
+  }
 }
