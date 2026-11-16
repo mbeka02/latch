@@ -1,5 +1,5 @@
-import type { PropsWithChildren, ReactNode } from 'react';
-import { ScrollView, View } from 'react-native';
+import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
+import { ScrollView, View, type RefreshControlProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 
@@ -11,9 +11,10 @@ import { AccessBackdrop } from '@/components/access-backdrop';
 import { Brand, brandMarkSvg } from '@/constants/branding';
 import { useTheme } from '@/hooks/use-theme';
 
-export function AccessScreen({ children, backdrop = 'none', headerActions }: PropsWithChildren<{
+export function AccessScreen({ children, backdrop = 'none', headerActions, refreshControl }: PropsWithChildren<{
   backdrop?: 'none' | 'static' | 'animated';
   headerActions?: ReactNode;
+  refreshControl?: ReactElement<RefreshControlProps>;
 }>) {
   const { environment } = useLatch();
   const insets = useSafeAreaInsets();
@@ -22,6 +23,7 @@ export function AccessScreen({ children, backdrop = 'none', headerActions }: Pro
     <ThemedView style={{ flex: 1 }}>
       {backdrop !== 'none' ? <AccessBackdrop animate={backdrop === 'animated'} /> : null}
       <ScrollView
+        refreshControl={refreshControl}
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets

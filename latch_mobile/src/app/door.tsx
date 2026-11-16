@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner-native';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
@@ -53,11 +53,17 @@ export default function DoorScreen() {
   const [organisations, setOrganisations] = useState<OrganisationChoice[]>([]);
   const [organisationKey, setOrganisationKey] = useState<string>();
   const [refresh, setRefresh] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [acknowledging, setAcknowledging] = useState(false);
   const pending = unlockState.status === 'pending';
-  const unlockBlocked = pending || coolingDown || unlockState.requiresAcknowledgement || acknowledging;
+  const accessBusy = pending || refreshing;
+  const unlockBlocked = accessBusy || coolingDown || unlockState.requiresAcknowledgement || acknowledging;
+  const refreshBlocked = pending || confirming || confirmingSignOut || acknowledging ||
+    state.status === 'loading' || state.status === 'organisations';
+  const refreshDisabled = refreshing || refreshBlocked;
   const outcome = unlockState.status === 'accepted'
     ? simulated ? 'Simulated unlock accepted. No physical door was operated.' : 'Unlock request accepted. Door position has not been confirmed.'
     : unlockState.status === 'denied' ? 'The provider denied the unlock request.'
@@ -90,9 +96,19 @@ export default function DoorScreen() {
         const doors = await app.doors.discoverDoors(organisationKey ?? choices[0].key);
         if (!active) return;
         if (!doors.length) throw new AccessError('entry-not-found');
-        setState(doors.length === 1 ? { status: 'ready', door: doors[0], choices: doors } : { status: 'doors', choices: doors });
+        setState((previous) => {
+          // Keep the visible context, but replace its invalidated choice key with
+          // the newly discovered choice. Missing/changed contexts need selection.
+          const selected = previous.status === 'ready' ? doors.find((door) =>
+            door.organisation === previous.door.organisation && door.name === previous.door.name &&
+            door.site === previous.door.site && door.zone === previous.door.zone) : undefined;
+          return selected ? { status: 'ready', door: selected, choices: doors }
+            : doors.length === 1 ? { status: 'ready', door: doors[0], choices: doors } : { status: 'doors', choices: doors };
+        });
       }
-    }).catch(unavailable);
+    }).catch(unavailable).finally(() => {
+      if (active) { refreshingRef.current = false; setRefreshing(false); }
+    });
     return () => { active = false; mounted.current = false; };
   }, [app, organisationKey, refresh]);
 
@@ -122,21 +138,33 @@ export default function DoorScreen() {
   }
 
   function confirmUnlock() {
-    if (state.status !== 'ready' || confirming || confirmingSignOut || unlockBlocked) return;
+    if (state.status !== 'ready' || confirming || confirmingSignOut || unlockBlocked || refreshingRef.current) return;
     setConfirming(true);
   }
 
+  function refreshAccess() {
+    if (refreshDisabled || refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    toast.dismiss();
+    setRefresh((value) => value + 1);
+  }
+
   return (
-    <AccessScreen headerActions={
+    <AccessScreen refreshControl={
+      <RefreshControl accessibilityLabel="Refresh door access"
+        refreshing={refreshing} enabled={!refreshBlocked} onRefresh={refreshAccess}
+        colors={[theme.action]} tintColor={theme.action} progressBackgroundColor={theme.backgroundElement} />
+    } headerActions={
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Account"
-        accessibilityState={{ expanded: confirmingSignOut, disabled: confirming || confirmingSignOut || pending }}
-        disabled={confirming || confirmingSignOut || pending}
+        accessibilityState={{ expanded: confirmingSignOut, disabled: confirming || confirmingSignOut || accessBusy }}
+        disabled={confirming || confirmingSignOut || accessBusy}
         onPress={() => setConfirmingSignOut(true)}
         style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: Spacing.three, borderRadius: 24,
           borderWidth: 1, borderColor: theme.modalOutline, flexDirection: 'row', alignItems: 'center', gap: Spacing.two,
-          opacity: confirming || confirmingSignOut || pending ? 0.5 : pressed ? 0.7 : 1 })}>
+          opacity: confirming || confirmingSignOut || accessBusy ? 0.5 : pressed ? 0.7 : 1 })}>
         <SymbolView name={{ ios: 'person', android: 'person', web: 'person' }} size={18} tintColor={theme.text} accessible={false} />
         <ThemedText type="smallBold">Account</ThemedText>
       </Pressable>
@@ -154,7 +182,7 @@ export default function DoorScreen() {
       {state.status === 'organisations' ? <>
         <ThemedText type="subtitle" accessibilityRole="header">Choose an organisation</ThemedText>
         {state.choices.map((choice) => <ActionButton key={choice.key} label={choice.name} secondary
-          disabled={confirmingSignOut} onPress={() => { setState({ status: 'loading' }); setOrganisationKey(choice.key); }} />)}
+          disabled={confirmingSignOut || refreshing} onPress={() => { setState({ status: 'loading' }); setOrganisationKey(choice.key); }} />)}
       </> : null}
       {state.status === 'doors' ? <>
         <ThemedText type="subtitle" accessibilityRole="header">Choose COE Door</ThemedText>
@@ -163,13 +191,13 @@ export default function DoorScreen() {
           {state.choices.map((choice, index) => <Pressable key={choice.key}
             accessibilityRole="button"
             accessibilityLabel={`${choice.name} · ${choice.site} · ${choice.zone}`}
-            accessibilityState={{ disabled: confirmingSignOut }}
-            disabled={confirmingSignOut}
+            accessibilityState={{ disabled: confirmingSignOut || refreshing }}
+            disabled={confirmingSignOut || refreshing}
             onPress={() => setState({ status: 'ready', door: choice, choices: state.choices })}
             android_ripple={{ color: theme.backgroundSelected }}
             style={({ pressed }) => ({ padding: Spacing.three, gap: Spacing.three, flexDirection: 'row', alignItems: 'center',
               borderTopWidth: index === 0 ? 0 : 1, borderTopColor: theme.modalOutline,
-              opacity: confirmingSignOut ? 0.5 : pressed ? 0.7 : 1 })}>
+              opacity: confirmingSignOut || refreshing ? 0.5 : pressed ? 0.7 : 1 })}>
             <DoorIdentity door={choice} />
             <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
               size={18} tintColor={theme.textSecondary} accessible={false} />
@@ -203,12 +231,12 @@ export default function DoorScreen() {
               flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
               {pending ? <ActivityIndicator size="small" color={theme.action} /> : null}
               <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }} accessibilityLiveRegion="polite">
-                {pending ? 'Request in progress' : unlockState.requiresAcknowledgement ? 'Previous result needs acknowledgement'
+                {refreshing ? 'Checking access…' : pending ? 'Request in progress' : unlockState.requiresAcknowledgement ? 'Previous result needs acknowledgement'
                   : coolingDown ? 'Please wait before another request' : simulated ? 'Ready for a simulated unlock' : 'Ready to request an unlock'}
               </ThemedText>
             </View>
           </View>
-          {state.choices.length > 1 ? <ActionButton label="Change door" quiet disabled={confirming || confirmingSignOut || pending}
+          {state.choices.length > 1 ? <ActionButton label="Change door" quiet disabled={confirming || confirmingSignOut || accessBusy}
             onPress={() => { toast.dismiss(); setState({ status: 'doors', choices: state.choices }); }} /> : null}
           <AppModal
             visible={confirming}
@@ -238,7 +266,7 @@ export default function DoorScreen() {
         {unlockState.requiresAcknowledgement ? <>
           <ThemedText>Check the door before acknowledging. This will not send another unlock request.</ThemedText>
           <ActionButton label={acknowledging ? 'Saving acknowledgement…' : 'Acknowledge result'} secondary
-            disabled={acknowledging || pending || confirmingSignOut} onPress={async () => {
+            disabled={acknowledging || accessBusy || confirmingSignOut} onPress={async () => {
               if (acknowledging) return;
               setAcknowledging(true);
               try { await app.doors.acknowledgeUnknown(); toast.dismiss(); }
@@ -249,12 +277,10 @@ export default function DoorScreen() {
             }} />
         </> : <ThemedText>Acknowledgement saved. A new request still needs confirmation.</ThemedText>}
       </> : null}
-      {state.status === 'ready' || state.status === 'unavailable' ? <ActionButton label="Refresh access" quiet={state.status === 'ready'} secondary
-        disabled={confirming || confirmingSignOut || pending} onPress={() => {
-          setState({ status: 'loading' }); toast.dismiss(); setRefresh((value) => value + 1);
-        }} /> : null}
+      {state.status === 'unavailable' ? <ActionButton label="Try again" secondary
+        disabled={refreshDisabled} onPress={refreshAccess} /> : null}
       {organisations.length > 1 && state.status !== 'organisations' ? <ActionButton label="Change organisation" quiet
-        disabled={confirming || confirmingSignOut || pending || state.status === 'loading'} onPress={() => {
+        disabled={confirming || confirmingSignOut || accessBusy || state.status === 'loading'} onPress={() => {
           toast.dismiss(); setState({ status: 'loading' }); setOrganisationKey(undefined); setRefresh((value) => value + 1);
         }} /> : null}
       <AppModal
