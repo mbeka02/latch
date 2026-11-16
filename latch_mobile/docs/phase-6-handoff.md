@@ -2,6 +2,12 @@
 
 Prepared 2026-11-16. The user selected a **live preview first**.
 
+## Profile compatibility correction after preview 4 — not rebuilt
+
+The user tested preview 4 and captured login **201** plus profile **200**. The profile omitted optional `identity.users`, exposing an incorrect adapter assumption. Current source accepts `identity.namespace.org` only for the exact login-derived organisation, with returned user and identity IDs checked; explicit contradictory associations still fail closed. It also distinguishes invalid response data from a connection outage. The saved local response passes offline replay through the updated diagnostic script. The synthetic API and real Router regressions exercise the observed shape without storing personal data. See [profile evidence](openpath-contract-evidence.md#observed-eu-profile-and-parser-correction).
+
+No replacement build was requested or created for this fix. The preview 4 download below still contains the old profile parser; it does not acquire the correction merely by reinstalling that artifact. Subsequent live phone and IFSS acceptance checks remain pending.
+
 ## Latest EU and UX preview — 1.0.0 (4)
 
 The user authorized a new live preview after merging the EU correction and UX refinements. EAS build [`1dbd4b5d-f010-426c-baa7-d553138897f7`](https://expo.dev/accounts/mbeka02/projects/latch/builds/1dbd4b5d-f010-426c-baa7-d553138897f7) **finished successfully** on 2026-11-16 at **17:52 Nairobi / 14:52 UTC**.

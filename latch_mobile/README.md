@@ -28,6 +28,8 @@ The latest built preview is **[Latch 1.0.0 (4), live APK](https://expo.dev/artif
 
 Use supported real Alta credentials only in the live candidate; the fictional accounts below belong to demo mode. A build passing compilation does not establish IFSS account compatibility or physical door operation.
 
+**Source correction after preview 4:** the captured live profile omits optional `identity.users`. Current source supports the observed `identity.namespace.org` shape only when its numeric organisation ID exactly matches the login-derived context and the returned user/identity IDs match. A present but contradictory/malformed `identity.users` list is still rejected. Unverifiable successful responses now produce `invalid-response` guidance instead of a connection-error message. **The existing preview 4 APK does not contain this correction; no replacement build has been created.** See [profile evidence](docs/openpath-contract-evidence.md#observed-eu-profile-and-parser-correction).
+
 ## Try the demo
 
 Install the locked dependencies with `npm ci`, then run `npm start` and open the project in a compatible Expo Go installation or Android emulator.
