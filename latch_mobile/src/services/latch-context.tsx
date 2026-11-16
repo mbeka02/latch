@@ -8,6 +8,7 @@ import { createOpenpath } from '@/services/openpath';
 import { createAndroidTransport } from '@/services/openpath-transport';
 import { reportUnlockOutcome } from '@/monitoring/operations';
 import { secureAttemptStorage, secureSessionStorage } from '@/storage/session';
+import { altaNamespaceNickname } from '@/constants/alta';
 
 type LatchContextValue = {
   environment: Openpath['environment'];
@@ -27,7 +28,7 @@ function configuredProvider(): Openpath {
   const mode = process.env.EXPO_PUBLIC_LATCH_MODE ?? 'demo';
   if (mode === 'demo') return createMockOpenpath();
   if (mode !== 'live') throw new Error('EXPO_PUBLIC_LATCH_MODE must be demo or live.');
-  return createOpenpath(createAndroidTransport(), { namespaceNickname: process.env.EXPO_PUBLIC_ALTA_NAMESPACE });
+  return createOpenpath(createAndroidTransport(), { namespaceNickname: altaNamespaceNickname() });
 }
 
 export function LatchProvider({ children, provider, storage, attemptStorage, now = Date.now }: PropsWithChildren<{ provider?: Openpath } & SessionOptions>) {

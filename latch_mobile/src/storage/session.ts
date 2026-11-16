@@ -1,14 +1,23 @@
 import * as SecureStore from 'expo-secure-store';
 
 import type { SessionStorage } from '@/lib/session-storage';
+import { altaNamespaceNickname } from '@/constants/alta';
 
-// Separate storage namespaces prevent a demo token being hydrated in a live build.
+// Live records are bound to the fixed EU region and configured namespace.
+// Legacy US records stay untouched and can never be hydrated into this context.
 export function secureSessionStorage(environment: 'demo' | 'live'): SessionStorage {
-  return secureRecordStorage(`latch.${environment}.session.v1`);
+  return secureRecordStorage(`latch.${storageScope(environment)}.session.v1`);
 }
 
 export function secureAttemptStorage(environment: 'demo' | 'live'): SessionStorage {
-  return secureRecordStorage(`latch.${environment}.attempts.v1`);
+  return secureRecordStorage(`latch.${storageScope(environment)}.attempts.v1`);
+}
+
+function storageScope(environment: 'demo' | 'live') {
+  if (environment === 'demo') return 'demo';
+  // Code-point encoding is collision-free and uses SecureStore-safe characters.
+  const namespace = Array.from(altaNamespaceNickname(), (character) => character.codePointAt(0)!.toString(16)).join('-') || 'default';
+  return `live.eu.${namespace}`;
 }
 
 function secureRecordStorage(key: string): SessionStorage {

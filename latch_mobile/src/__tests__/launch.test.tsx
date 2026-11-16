@@ -2,6 +2,7 @@ import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-rout
 import { AppState, type AppStateStatus } from 'react-native';
 import { toast } from 'sonner-native';
 import * as SecureStore from 'expo-secure-store';
+import { NativeModulesProxy } from 'expo-modules-core';
 import type { Entry, ProviderSession } from '@/lib/openpath';
 import { AccessError } from '@/lib/access-error';
 
@@ -14,6 +15,69 @@ import { createOpenpath, type OpenpathRequest } from '@/services/openpath';
 import * as Sentry from '@sentry/react-native';
 import * as Reanimated from 'react-native-reanimated';
 import NotFoundScreen from '@/app/+not-found';
+
+test('the configured IFSS live app signs in with the exact org namespace through its native client', async () => {
+  const previousMode = process.env.EXPO_PUBLIC_LATCH_MODE;
+  const previousNamespace = process.env.EXPO_PUBLIC_ALTA_NAMESPACE;
+  process.env.EXPO_PUBLIC_LATCH_MODE = 'live';
+  delete process.env.EXPO_PUBLIC_ALTA_NAMESPACE;
+  const requests: { path: string; body: string | null }[] = [];
+  const native = { cancel() {}, async request(_handle: string, _method: string, path: string, _token: string | null, body: string | null) {
+    requests.push({ path, body });
+    if (path === '/auth/login') {
+      if (JSON.parse(body!).namespaceNickname !== 'org:ifss-group') return { status: 400, body: '{}' };
+      return { status: 201, body: JSON.stringify({ data: { token: 'fixture-token', identityId: 17, identity: { id: 17 },
+        tokenScopeList: [{ org: { id: 31 }, user: { id: 42 } }] } }) };
+    }
+    if (path === '/orgs/31/users/42') return { status: 200, body: JSON.stringify({ data: { id: 42,
+      identity: { id: 17, email: 'employee@example.com', users: [{ id: 42, org: { id: 31, name: 'IFSS' } }] } } }) };
+    if (path.endsWith('/entries')) return { status: 200, body: JSON.stringify({ filteredCount: 1, data: [
+      { id: 90, name: 'COE Door', zone: { name: 'COE', site: { name: 'Main building' } } },
+    ] }) };
+    if (path.includes('/credentials?')) return { status: 200, body: JSON.stringify({ data: path.includes('offset=0&') ? [{ id: 71, cloudKey: { id: 701 } }] : [] }) };
+    throw new Error('Unexpected native request');
+  } };
+  const registry = NativeModulesProxy as Record<string, unknown>;
+  const previousNative = registry.LatchOpenpathTransport;
+  registry.LatchOpenpathTransport = native;
+  jest.spyOn(SecureStore, 'getItemAsync').mockResolvedValue(null);
+  try {
+    await renderRouter({ _layout: RootLayout, index: HomeScreen, door: DoorScreen });
+    await fireEvent.changeText(screen.getByLabelText('Email'), ' employee@example.com ');
+    await fireEvent.changeText(screen.getByLabelText('Password'), ' fixture-password ');
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+    expect(requests.length).toBeGreaterThan(0);
+    expect(JSON.parse(requests[0].body!)).toEqual({ email: 'employee@example.com', password: ' fixture-password ', namespaceNickname: 'org:ifss-group' });
+    expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+    expect(requests.some(({ path }) => path.endsWith('/cloudKeyEntryUnlock'))).toBe(false);
+  } finally {
+    if (previousNative === undefined) delete registry.LatchOpenpathTransport; else registry.LatchOpenpathTransport = previousNative;
+    if (previousMode === undefined) delete process.env.EXPO_PUBLIC_LATCH_MODE; else process.env.EXPO_PUBLIC_LATCH_MODE = previousMode;
+    if (previousNamespace === undefined) delete process.env.EXPO_PUBLIC_ALTA_NAMESPACE; else process.env.EXPO_PUBLIC_ALTA_NAMESPACE = previousNamespace;
+  }
+});
+
+test('the EU app never restores a legacy US live token into its current provider', async () => {
+  const startedAt = Date.now();
+  const nativeValues = new Map([['latch.live.session.v1', JSON.stringify({ version: 1, environment: 'live',
+    token: 'legacy-us-token', identityId: '17', startedAt, expiresAt: startedAt + 600_000,
+    associations: [{ orgId: 31, userId: 42 }],
+  })]]);
+  jest.spyOn(SecureStore, 'getItemAsync').mockImplementation(async (key) => nativeValues.get(key) ?? null);
+  jest.spyOn(SecureStore, 'setItemAsync').mockImplementation(async (key, value) => { nativeValues.set(key, value); });
+  jest.spyOn(SecureStore, 'deleteItemAsync').mockImplementation(async (key) => { nativeValues.delete(key); });
+  const requests: OpenpathRequest[] = [];
+  const provider = createOpenpath(async (request) => {
+    requests.push(request);
+    return { status: 200, body: JSON.stringify({ data: { id: 42, identity: { id: 17, email: 'employee@example.com',
+      users: [{ id: 42, org: { id: 31, name: 'IFSS' } }] } } }) };
+  });
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  expect(await screen.findByRole('header', { name: 'Sign in to Latch' })).toBeOnTheScreen();
+  expect(requests).toEqual([]);
+  expect(nativeValues.has('latch.live.session.v1')).toBe(true);
+});
 
 beforeEach(() => {
   jest.spyOn(Reanimated, 'useReducedMotion').mockReturnValue(true);

@@ -26,7 +26,7 @@ public final class OpenpathHttp {
   private final Set<String> cancelled = new LinkedHashSet<>();
   private boolean closed;
 
-  public OpenpathHttp() { this(new OkHttpClient(), HttpUrl.get("https://api.openpath.com/")); }
+  public OpenpathHttp() { this(new OkHttpClient(), HttpUrl.get("https://api.eu.openpath.com/")); }
 
   // Package-private injection for local TLS contract fixtures only. Not bridged.
   OpenpathHttp(OkHttpClient base, HttpUrl origin) {
