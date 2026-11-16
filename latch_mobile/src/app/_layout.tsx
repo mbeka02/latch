@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { Stack } from 'expo-router/stack';
-import { useColorScheme } from 'react-native';
+import { ActivityIndicator, View, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Sentry from '@sentry/react-native';
 import { useFonts } from 'expo-font';
@@ -14,6 +14,8 @@ import type { SessionOptions } from '@/services/latch';
 import { AccessScreen } from '@/components/access-screen';
 import { ThemedText } from '@/components/themed-text';
 import { LaunchScreen } from '@/components/launch-screen';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export { RouteError as ErrorBoundary } from '@/components/route-error';
 
@@ -47,7 +49,11 @@ export default function Layout(props: RootLayoutProps = {}) {
 
 function SessionStack() {
   const { session, authState } = useLatch();
-  if (authState.status === 'restoring') return <AccessScreen><ThemedText>Checking secure session…</ThemedText></AccessScreen>;
+  const theme = useTheme();
+  if (authState.status === 'restoring') return <AccessScreen><View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.three }}>
+    <ActivityIndicator color={theme.textSecondary} />
+    <ThemedText accessibilityLiveRegion="polite">Checking secure session…</ThemedText>
+  </View></AccessScreen>;
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={!session}>

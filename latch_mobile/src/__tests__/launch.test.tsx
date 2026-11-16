@@ -499,7 +499,7 @@ test('a removed entry requires refreshed access and a fresh confirmation without
   removed = true;
   await fireEvent.press(within(await screen.findByTestId('app-modal')).getByRole('button', { name: 'Unlock' }));
 
-  expect(await screen.findByRole('alert')).toHaveTextContent(/Door access has changed/);
+  expect(await screen.findByRole('alert', { name: /^COE Door access is unavailable/ })).toHaveTextContent(/Door access has changed/);
   expect(screen.queryByText("We couldn't confirm the result. Check before trying again.")).not.toBeOnTheScreen();
   expect(base.getUnlockRequests()).toEqual([]);
   removed = false;

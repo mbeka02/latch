@@ -6,6 +6,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { AccessScreen } from '@/components/access-screen';
 import { ActionButton } from '@/components/action-button';
+import { InlineMessage } from '@/components/inline-message';
 import { ThemedText } from '@/components/themed-text';
 import type { DoorChoice, OrganisationChoice } from '@/services/latch';
 import { useLatch } from '@/services/latch-context';
@@ -176,7 +177,7 @@ export default function DoorScreen() {
       {state.status === 'unavailable' ? (
         <View style={{ gap: Spacing.three, paddingVertical: Spacing.four }}>
           <ThemedText type="subtitle" accessibilityRole="header">Access unavailable</ThemedText>
-          <ThemedText selectable accessibilityRole="alert">COE Door access is unavailable. {state.message}</ThemedText>
+          <InlineMessage>COE Door access is unavailable. {state.message}</InlineMessage>
         </View>
       ) : null}
       {state.status === 'organisations' ? <>
@@ -214,22 +215,13 @@ export default function DoorScreen() {
               <View style={{ flexGrow: 1, flexBasis: 160, minWidth: 0 }}>
                 <DoorIdentity door={state.door} />
               </View>
-              <Pressable accessibilityRole="button"
+              <ActionButton compact label={pending ? 'Requesting…' : 'Unlock'} loading={pending}
                 accessibilityLabel={pending ? 'Requesting unlock…' : `Unlock ${state.door.name}`}
-                accessibilityState={{ disabled: confirming || confirmingSignOut || unlockBlocked, busy: pending }}
                 disabled={confirming || confirmingSignOut || unlockBlocked}
-                onPress={confirmUnlock}
-                android_ripple={{ color: theme.backgroundSelected }}
-                style={({ pressed }) => ({ minHeight: 48, minWidth: 88, maxWidth: '100%', paddingHorizontal: Spacing.three,
-                  paddingVertical: Spacing.two, alignItems: 'center', justifyContent: 'center',
-                  borderRadius: AccessLayout.controlRadius, backgroundColor: theme.action,
-                  opacity: confirming || confirmingSignOut || unlockBlocked ? 0.5 : pressed ? 0.8 : 1 })}>
-                <ThemedText style={{ color: theme.actionText, fontWeight: '700' }}>{pending ? 'Requesting…' : 'Unlock'}</ThemedText>
-              </Pressable>
+                onPress={confirmUnlock} />
             </View>
             <View style={{ borderTopWidth: 1, borderTopColor: theme.modalOutline, paddingTop: Spacing.two,
               flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
-              {pending ? <ActivityIndicator size="small" color={theme.action} /> : null}
               <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }} accessibilityLiveRegion="polite">
                 {refreshing ? 'Checking access…' : pending ? 'Request in progress' : unlockState.requiresAcknowledgement ? 'Previous result needs acknowledgement'
                   : coolingDown ? 'Please wait before another request' : simulated ? 'Ready for a simulated unlock' : 'Ready to request an unlock'}
@@ -257,7 +249,9 @@ export default function DoorScreen() {
       ) : null}
       {showOutcome ? <View style={{ gap: Spacing.two, padding: Spacing.three, borderLeftWidth: 3, borderLeftColor: theme.inputOutline }}>
         <ThemedText themeColor="textSecondary" type="small">Latest request</ThemedText>
-        <ThemedText selectable accessibilityLiveRegion="polite">{outcome}</ThemedText>
+        {unlockState.status === 'accepted'
+          ? <ThemedText selectable accessibilityLiveRegion="polite">{outcome}</ThemedText>
+          : <InlineMessage tone={unlockState.status === 'unknown' ? 'warning' : 'error'}>{outcome}</InlineMessage>}
       </View> : null}
       {unlockState.status === 'unknown' && unlockState.door ? <>
         <ThemedText selectable themeColor="textSecondary">
@@ -266,6 +260,7 @@ export default function DoorScreen() {
         {unlockState.requiresAcknowledgement ? <>
           <ThemedText>Check the door before acknowledging. This will not send another unlock request.</ThemedText>
           <ActionButton label={acknowledging ? 'Saving acknowledgement…' : 'Acknowledge result'} secondary
+            loading={acknowledging}
             disabled={acknowledging || accessBusy || confirmingSignOut} onPress={async () => {
               if (acknowledging) return;
               setAcknowledging(true);
@@ -278,6 +273,7 @@ export default function DoorScreen() {
         </> : <ThemedText>Acknowledgement saved. A new request still needs confirmation.</ThemedText>}
       </> : null}
       {state.status === 'unavailable' ? <ActionButton label="Try again" secondary
+        loading={refreshing}
         disabled={refreshDisabled} onPress={refreshAccess} /> : null}
       {organisations.length > 1 && state.status !== 'organisations' ? <ActionButton label="Change organisation" quiet
         disabled={confirming || confirmingSignOut || accessBusy || state.status === 'loading'} onPress={() => {
