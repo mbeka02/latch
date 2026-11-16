@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect Alta login + own-user profile responses locally, without door requests."""
+"""Inspect Alta login/profile responses and optional user-scoped entries; never unlock."""
 
 import argparse
 import datetime
@@ -139,7 +139,49 @@ def validate_profile(response, identity_id, org_id, user_id, previous_email=None
         return {'passed': False, 'failedAt': checks[-1]['field'], 'checks': checks}, previous_email
 
 
-def probe(host, email, password, code, namespace, report, secrets):
+def describe_entries(response):
+    """Explain the existing entry decoder and exact COE name filter, without credentials."""
+    if not isinstance(response, dict) or not isinstance(response.get('data'), list):
+        return {'responseValid': False, 'problems': ['Expected a data array.'], 'exactCoeMatches': []}
+    entries = response['data']
+    count = response.get('filteredCount')
+    if count is None:
+        count = response.get('totalCount')
+    problems = []
+    if type(count) not in (int, float) or count != len(entries):
+        problems.append('filteredCount/totalCount must equal the number of returned entries.')
+    summaries = []
+    ids = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            problems.append(f'data[{index}] is not an object.')
+            continue
+        zone = entry.get('zone')
+        site = zone.get('site') if isinstance(zone, dict) else None
+        name = entry.get('name')
+        summary = {'id': entry.get('id'), 'name': name,
+                   'zone': zone.get('name') if isinstance(zone, dict) else None,
+                   'site': site.get('name') if isinstance(site, dict) else None,
+                   'exactCoeMatch': isinstance(name, str) and name.strip().lower() == 'coe door'}
+        summaries.append(summary)
+        if not numeric_id(entry.get('id')):
+            problems.append(f'data[{index}].id is not a positive safe integer.')
+        else:
+            ids.append(entry['id'])
+        for field in ('name', 'zone', 'site'):
+            if not isinstance(summary[field], str) or not summary[field].strip():
+                problems.append(f'data[{index}].{field} is missing, empty or not a string.')
+    if len(set(ids)) != len(ids):
+        problems.append('Duplicate entry IDs would be rejected by Latch.')
+    matches = [entry for entry in summaries if entry['exactCoeMatch']]
+    return {'responseValid': not problems, 'returnedCount': len(entries), 'reportedCount': count,
+            'entries': summaries, 'exactCoeMatches': matches, 'problems': problems,
+            'latchEntryResult': 'invalid-response' if problems else 'entry-not-found' if not matches
+            else 'COE matches found; credentials and unlock eligibility remain unchecked',
+            'note': 'No matching name does not establish whether account permissions, door naming or configuration caused the result.'}
+
+
+def probe(host, email, password, code, namespace, report, secrets, include_entries=False):
     body = {'email': email.strip(), 'password': password}
     if namespace:
         body['namespaceNickname'] = namespace
@@ -195,24 +237,41 @@ def probe(host, email, password, code, namespace, report, secrets):
         if not validation['passed']:
             report['result'] = 'HTTP 200 profile rejected by current Latch validation: ' + validation['failedAt']
             return 1
+    if include_entries:
+        total_matches = 0
+        for org_id, user_id in dict.fromkeys(associations):
+            record, entries = request(host, 'GET', f'/orgs/{org_id}/users/{user_id}/entries', token=token.strip())
+            report['requests'].append(record)
+            if record['status'] != 200:
+                report['result'] = f'Entries returned HTTP {record["status"]}. Full JSON is recorded; no further requests sent.'
+                return 1
+            discovery = describe_entries(entries)
+            record['latchEntryDiscovery'] = discovery
+            if not discovery['responseValid']:
+                report['result'] = 'Entries returned HTTP 200 but did not meet Latch’s current response contract. See problems and full body.'
+                return 1
+            total_matches += len(discovery['exactCoeMatches'])
+        report['result'] = f'Entry inspection finished: {total_matches} exact COE Door match(es). No credentials read or unlocks sent.'
+        return 0
     report['result'] = 'All profile checks passed. This does not test native transport, storage, door access or unlocking.'
     return 0
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--region', choices=('eu', 'us'), default='eu', help='Default: eu, matching preview 4. No regional fallback.')
+    parser.add_argument('--region', choices=('eu', 'us'), default='eu', help='Default: eu, matching the live app. No regional fallback.')
     parser.add_argument('--namespace', default='org:ifss-group', help='Exact public namespace; default: org:ifss-group.')
     parser.add_argument('--output', type=Path, help='Optionally save the redacted report to a NEW local file (permissions 0600).')
+    parser.add_argument('--entries', action='store_true', help='After profile validation, inspect each login-derived own-user entries response. Never unlocks.')
     args = parser.parse_args()
     if not sys.stdin.isatty():
         parser.error('Run interactively in your own terminal; credentials are not accepted through a pipe or flags.')
     host = {'eu': 'api.eu.openpath.com', 'us': 'api.openpath.com'}[args.region]
     report = {'timestampUtc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              'origin': f'https://{host}', 'namespace': args.namespace, 'requests': [],
-              'note': 'Complete JSON responses, with tokens/passwords/authenticator secrets redacted. Profile personal data remains visible.'}
-    print(f'Using https://{host}, namespace {args.namespace}. One login, then own-user profile reads only.')
-    print('No redirects, retries, entry/credential reads, unlock requests or Sentry uploads.')
+              'origin': f'https://{host}', 'namespace': args.namespace, 'mode': 'entries' if args.entries else 'profile', 'requests': [],
+              'note': 'Complete JSON responses, with tokens/passwords/authenticator secrets redacted. Profile and entry data remain visible.'}
+    print(f'Using https://{host}, namespace {args.namespace}. One login, then own-user profile reads' + (' and entries.' if args.entries else ' only.'))
+    print('No redirects, retries, credential reads, unlock requests or Sentry uploads.')
     print('Inputs are visible in this terminal, as requested; they are not written to the report.')
     email = input('Alta email: ').strip()
     password = input('Alta password: ')
@@ -224,7 +283,7 @@ def main():
         parser.error('Output file already exists. Choose a new file or remove it yourself. No request sent.')
     status = 1
     try:
-        status = probe(host, email, password, code, args.namespace, report, secrets)
+        status = probe(host, email, password, code, args.namespace, report, secrets, include_entries=args.entries)
     except (OSError, http.client.HTTPException) as error:
         report['result'] = f'No usable response: {type(error).__name__}. Raw exception omitted.'
     except (KeyboardInterrupt, EOFError):
