@@ -24,7 +24,7 @@ The `preview` profile builds a signed release APK for direct installation. It ex
 npx eas-cli@latest build --platform android --profile preview
 ```
 
-The first build completed successfully: **[download Latch 1.0.0 (2), live APK](https://expo.dev/artifacts/eas/j_rbB_uEFR9av5b5docxYQpMfo8CDNWsvjQlkf25eDI.apk)** or open [its EAS build page](https://expo.dev/accounts/mbeka02/projects/latch/builds/fa6ab713-730e-40e5-b92e-c7fbe71da71f). See [the phase 6 handoff](docs/phase-6-handoff.md) for signature/manifest evidence, install/device checks and IFSS acceptance steps. Build numbers and signing are managed by EAS. The public Sentry DSN is configured in the EAS preview environment; source-map upload failed because the build auth token is absent, and real-event verification remains pending.
+The latest built preview is **[Latch 1.0.0 (3), live APK](https://expo.dev/artifacts/eas/TSzvftu4AIHtISV0SsjCZ1lj20PkvYyUr-ie3Vfqpjc.apk)**. **It predates the EU/namespace correction below.** The corrected source has not been built or uploaded: the user explicitly requested holding the next APK while further changes are made. See [the phase 6 handoff](docs/phase-6-handoff.md) for artifact evidence and IFSS acceptance steps. Build numbers and signing are managed by EAS. The public Sentry DSN is configured in the EAS preview environment; diagnostic log delivery is verified, while source-map upload still requires build authentication.
 
 Use supported real Alta credentials only in the live candidate; the fictional accounts below belong to demo mode. A build passing compilation does not establish IFSS account compatibility or physical door operation.
 
@@ -71,7 +71,11 @@ Use fictional credentials in the default demo build. Its in-process mock cannot 
 
 ## Direct Alta mode (phase 5)
 
-Build configuration selects `EXPO_PUBLIC_LATCH_MODE=demo` (default when omitted) or `EXPO_PUBLIC_LATCH_MODE=live`. There is no in-app environment switch and no fallback after a live error. An invalid mode stops initialization. `EXPO_PUBLIC_ALTA_NAMESPACE` optionally supplies a confirmed namespace nickname; omit it when unnecessary. These are public build settings, never credentials. The host is fixed in native code to `https://api.openpath.com/`; there is no configurable API URL, shared key or evaluator-entered entry ID.
+Build configuration selects `EXPO_PUBLIC_LATCH_MODE=demo` (default when omitted) or `EXPO_PUBLIC_LATCH_MODE=live`. There is no in-app environment switch and no fallback after a live error. An invalid mode stops initialization. The native host is fixed to **`https://api.eu.openpath.com/`** for the IFSS EU deployment. The default namespace is **`org:ifss-group`**, including the `org:` prefix; the preview profile explicitly sets the same public value through `EXPO_PUBLIC_ALTA_NAMESPACE`. A confirmed build-time namespace override remains supported. These are public routing settings, never credentials. There is no arbitrary API URL, shared key or evaluator-entered entry ID.
+
+The user verified **HTTP 201** with the EU public login endpoint and exact namespace on 2026-11-16. This establishes that login combination for their account, not subsequent profile/door/Cloud Key reads or unlock eligibility. Current source applies the combination; the existing APKs still pin the US host and omit the namespace. No new APK was created after this correction.
+
+SecureStore live session and unresolved-attempt keys now include the EU context and an unambiguous encoding of the configured namespace. Legacy US records remain untouched and are never restored or forwarded into the new context. An upgrade therefore requires fresh sign-in. Demo storage remains separate and unchanged. Changing the configured namespace also selects separate live records.
 
 Live mode requires an Android build containing the local Expo module. **Expo Go, web and iOS do not provide that client**: requests fail closed rather than using generic fetch or demo data. The phase 6 EAS build compiles and packages the bridge; phone/runtime and IFSS acceptance checks remain pending. Evaluators need the resulting APK and their supported Alta account, not these developer settings.
 

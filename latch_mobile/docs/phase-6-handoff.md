@@ -2,9 +2,17 @@
 
 Prepared 2026-11-16. The user selected a **live preview first**.
 
+## Pending EU source correction — hold the next build
+
+The user subsequently verified **HTTP 201** from `https://api.eu.openpath.com/auth/login` with `namespaceNickname: org:ifss-group`, and requested applying the fix **without creating another build**. Current source now pins the native client to the EU host and supplies that exact namespace by default; the preview profile also explicitly includes it. Live session and attempt storage is partitioned by EU region and configured namespace, leaving legacy US records untouched and forcing fresh sign-in in the new context. No arbitrary-host selection, cross-region fallback, shared credentials or portal-discovery dependency was added.
+
+Checks: **155 JavaScript tests / seven suites**, lint, typecheck and **10 local JVM transport fixtures** passed. Two real Router regressions cover the configured live namespace request and refusal to hydrate a legacy US token. No APK, native app launch, emulator, dev server or EAS job was created for this correction. Further source changes and a future native build remain subject to the user's next steps. The existing downloads below still contain the old US configuration; they cannot acquire this native-origin correction through Metro.
+
+The successful local probe establishes authentication only. Header-authenticated profile reads, COE discovery, own Cloud Key retrieval and supervised unlock/permission behavior still require testing in the corrected Android app.
+
 ## Latest diagnostics preview
 
-The replacement live preview **1.0.0 (3)** finished successfully on 2026-11-16. Install it over the original preview and retry sign-in to inspect the new diagnostic fields; Expo Go does not include the custom live transport. Metro is stopped.
+The replacement live preview **1.0.0 (3)** finished successfully on 2026-11-16 and supplied the diagnostic evidence recorded below. It still uses the old US configuration; use a future corrected APK for the next sign-in check. Expo Go does not include the custom live transport. Metro is stopped.
 
 - [Download the replacement APK](https://expo.dev/artifacts/eas/TSzvftu4AIHtISV0SsjCZ1lj20PkvYyUr-ie3Vfqpjc.apk) · [EAS build `a4a32b60-bf6b-4843-bc03-51397ca68e35`](https://expo.dev/accounts/mbeka02/projects/latch/builds/a4a32b60-bf6b-4843-bc03-51397ca68e35).
 - Source commit `5825356`; diagnostics fix `83593a0`. APK size **113,122,631 bytes**; SHA-256 `d2d61839b730e147755a65751f0251831623f0314bee7912798c9ce5da3cf07a`.

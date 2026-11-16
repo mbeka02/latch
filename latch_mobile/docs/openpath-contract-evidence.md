@@ -29,6 +29,12 @@ The user's later preserved browser capture supplies stronger evidence, supersedi
 
 The next controlled probe is the **documented EU public host** `api.eu.openpath.com`, `/auth/login`, with explicit `namespaceNickname: org:ifss-group`, preserving the user's password/MFA choices. The temporary helper supports `--region eu --namespace org:ifss-group --full-response`; a successful token remains hidden. This verifies the public-host path before changing the application's fixed origin/configuration. Do not forward the browser's captured token to other hosts or infer that Latch must adopt the portal's discovery endpoints. Preview 3 still uses the US public host and omits the namespace, so it does not match the observed EU namespace context.
 
+### Confirmed public login and applied source correction
+
+The user then reported **HTTP 201** from that EU public-host probe with the exact `org:ifss-group` namespace. This supersedes the earlier rejection-only evidence: the verified combination authenticates this account without portal access being restored. It does not independently identify which of the previous region/namespace omissions caused each failed request, nor prove any subsequent API operation or door permission.
+
+At the user's request, source now uses the fixed EU native origin and the verified namespace default, with the same namespace explicitly set in the preview profile. Live secure session and attempt storage is partitioned by EU context and configured namespace, so legacy US credentials cannot be hydrated into the corrected provider. Existing demo storage is unchanged. **No replacement APK was built**, as explicitly requested. The above references to preview 3's US host remain accurate for that existing artifact. Verification of the corrected source: **155 JavaScript tests**, lint/typecheck and **10 JVM transport fixtures** passed. Profile, entry, Cloud Key and unlock compatibility on the corrected phone build remain unverified.
+
 ## Native login
 
 `POST /auth/login` accepts JSON with required `email:string` (email format) and `password:string`; optional `namespaceId:integer` **or** `namespaceNickname:string` (1–255 characters), never both; optional `mfa:{totpCode:string}` (the object requires `totpCode`); and optional `forMobileLogin:boolean`. No semantics for `forMobileLogin` are documented. The guide specifies the current six-digit authenticator code in `mfa.totpCode`. [Login schema](https://openpath.readme.io/reference/login), [MFA guide](https://openpath.readme.io/docs/using-the-api)
