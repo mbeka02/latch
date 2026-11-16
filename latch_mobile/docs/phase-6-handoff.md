@@ -2,13 +2,19 @@
 
 Prepared 2026-11-16. The user selected a **live preview first**.
 
-## Profile compatibility correction after preview 4 — not rebuilt
+## Latest profile-compatible preview — 1.0.0 (5)
 
-The user tested preview 4 and captured login **201** plus profile **200**. The profile omitted optional `identity.users`, exposing an incorrect adapter assumption. Current source accepts `identity.namespace.org` only for the exact login-derived organisation, with returned user and identity IDs checked; explicit contradictory associations still fail closed. It also distinguishes invalid response data from a connection outage. The saved local response passes offline replay through the updated diagnostic script. The synthetic API and real Router regressions exercise the observed shape without storing personal data. See [profile evidence](openpath-contract-evidence.md#observed-eu-profile-and-parser-correction).
+EAS build [`9779f600-bba3-423a-a1ed-b68dfd71245e`](https://expo.dev/accounts/mbeka02/projects/latch/builds/9779f600-bba3-423a-a1ed-b68dfd71245e) **finished successfully** on 2026-11-16 at **19:28 Nairobi / 16:28 UTC**. [Download Latch 1.0.0 (5)](https://expo.dev/artifacts/eas/GFGhv_b3mtd6F43HoLwCZiXmiDJ3XhkR-59Wy9IQycY.apk).
 
-No replacement build was requested or created for this fix. The preview 4 download below still contains the old profile parser; it does not acquire the correction merely by reinstalling that artifact. Subsequent live phone and IFSS acceptance checks remain pending.
+- Source commit `d4f922689678f872063aeb521125a7c1c597eb9f` includes the profile fix `d75a705`: optional `identity.users` can be absent when namespace organisation, login organisation, profile user and identity match exactly. Contradictory explicit associations still fail closed. Response-validation failures receive accurate guidance rather than a connection-outage message.
+- APK size **113,127,663 bytes**; SHA-256 `aa86701ebd3227f7b5514f12d0e2e685eed777177cad49228f0fde33639c88e3`. Signature Scheme v2 verifies with the same certificate as previous previews. Package `com.mbeka02.latch`, version `1.0.0` / code `5`, non-debuggable, `allowBackup=false`.
+- DEX contains the fixed EU origin and transport module, with the exact US origin absent. Hermes contains `org:ifss-group`, MFA UI, `invalid-response` classification/guidance and diagnostic field names. The build's source commit and packaging match the requested correction; phone behavior remains to be tested.
+- **169 JavaScript tests / seven suites**, lint and typecheck passed on the unchanged source before upload. Offline replay of the saved profile through the diagnostic validator passed. No real login/unlock request or app launch was made by the agent.
+- Both cloud dependency-insight tasks succeeded with OkHttp `4.9.2` / Okio `3.16.0`. Sentry source-map upload still failed with **Auth token is required**, permitted by existing `SENTRY_ALLOW_FAILURE=true`. Receipt/readable stacks for release `com.mbeka02.latch@1.0.0+5` / dist `5` are unverified.
 
-## Latest EU and UX preview — 1.0.0 (4)
+Install as an update and retry sign-in. Preview 4 authenticated successfully but rejected the profile shape; this APK contains that fix. Subsequent COE discovery, own Cloud Key and permission checks still require a live phone test. See [profile findings](openpath-contract-evidence.md#observed-eu-profile-and-parser-correction) and [artifact evidence](apk-profile-preview-evidence.json). Historical artifacts below retain their original limitations.
+
+## Earlier EU and UX preview — 1.0.0 (4)
 
 The user authorized a new live preview after merging the EU correction and UX refinements. EAS build [`1dbd4b5d-f010-426c-baa7-d553138897f7`](https://expo.dev/accounts/mbeka02/projects/latch/builds/1dbd4b5d-f010-426c-baa7-d553138897f7) **finished successfully** on 2026-11-16 at **17:52 Nairobi / 14:52 UTC**.
 
