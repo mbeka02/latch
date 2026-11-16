@@ -85,6 +85,16 @@ Async actions use the shared button's in-button spinner and busy/disabled semant
 
 The adapter uses native email/password login, the employee's raw JWT authorization header, current user/profile reads, user-scoped entries, existing paged credentials, and Cloud Key unlock. It identifies Cloud Keys by the returned `cloudKey` variant and sends the outer credential ID. Entries must carry readable site/zone context and a count consistent with all returned entries; missing/inconsistent context blocks selection. The entries schema declares no pagination inputs, so the app does not invent them. Credentials continue until an empty page, with inconsistent supplied counts rejected.
 
+### Local profile diagnostic
+
+When login returns 201 but the profile check fails after HTTP 200, run this from `latch_mobile` in your own terminal:
+
+```sh
+python3 scripts/check-alta-profile.py --output /tmp/latch-alta-profile-report.json
+```
+
+It defaults to the EU host and exact `org:ifss-group` namespace, prompts for credentials (visible locally, matching the earlier diagnostic preference), signs in once, and reads only the own-user profiles identified in the login response. It prints complete JSON with token/password/authenticator secrets redacted, then names the first failing check from the current adapter's profile validation. Personal profile fields remain visible. The optional report is a new local file with permissions `0600`; existing files are not overwritten. Email is trimmed; password whitespace is preserved. It has no retries, redirects, entry/credential reads, unlocks or Sentry uploads. The login token stays in process memory and is used only on the selected fixed host. Success checks the profile logic, not Android transport, secure storage or door permissions. No dependency or APK rebuild is required. Six offline HTTP-fixture scenarios verified the public script flow and secret removal; no real credentials were used by the agent.
+
 Login-derived org/user IDs are saved only as lookup hints. Restoration checks each against the current header-authenticated user/profile response and matching identity, recovers current org names, and preserves the original local expiry cap. It neither decodes JWT claims nor calls a token-in-URL endpoint or rotating refresh endpoint. Missing hints require fresh sign-in; new memberships require fresh sign-in to enter the saved hint set. A denied or malformed association blocks restoration. Saved IDs grant no authority; every discovery/preflight/unlock remains subject to Alta's current permissions.
 
 Live confirmation explains that it requests a real unlock. Accepted feedback says **Unlock request accepted. Door position has not been confirmed.** Unauthorized responses, lost replies and session expiry use the same safe lifecycle/recovery rules as the demo. Local sign-out is available after an uncertain result without discarding its journal.
