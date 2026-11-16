@@ -1,6 +1,6 @@
 import { AccessError } from '@/lib/access-error';
 import type { Openpath, SessionHints, UserSession, Membership, UserContext, Credential } from '@/lib/openpath';
-import { observeOperation } from '@/monitoring/operations';
+import { observeOperation, type OperationDiagnostics } from '@/monitoring/operations';
 
 function bad(): never { throw new AccessError('unavailable'); }
 function object(value: unknown): Record<string, unknown> {
@@ -32,19 +32,22 @@ export type OpenpathRequest = {
 export type OpenpathTransport = (request: OpenpathRequest, signal: AbortSignal) => Promise<{ status: number; body: string }>;
 
 export function createOpenpath(transport: OpenpathTransport, options: { namespaceNickname?: string } = {}): Openpath {
-  async function send(request: OpenpathRequest, expected: number) {
+  async function send<T>(request: OpenpathRequest, expected: number, decode: (body: string) => T) {
     const operation = request.path === '/auth/login' ? 'login' : request.path.endsWith('/cloudKeyEntryUnlock') ? 'unlock'
       : request.path.endsWith('/entries') ? 'entries' : request.path.includes('/credentials?') ? 'credentials' : 'session-check';
+    const diagnostics: OperationDiagnostics = { stage: 'transport' };
     return observeOperation(operation, async () => {
       const controller = new AbortController();
       let timer: ReturnType<typeof setTimeout>;
       const deadline = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); reject(new AccessError('unavailable')); }, 15_000);
+        timer = setTimeout(() => { diagnostics.stage = 'timeout'; controller.abort(); reject(new AccessError('unavailable')); }, 15_000);
       });
       let response;
       try { response = await Promise.race([transport(request, controller.signal), deadline]); }
       catch { return bad(); }
       finally { clearTimeout(timer!); }
+      diagnostics.stage = 'response-status';
+      diagnostics.status = response.status;
       if (response.status !== expected) {
         // Status policies, not vendor error-code contracts. Never expose the body.
         if (request.path === '/auth/login' && [400, 401, 403].includes(response.status)) throw new AccessError('invalid-credentials');
@@ -52,8 +55,9 @@ export function createOpenpath(transport: OpenpathTransport, options: { namespac
         if (response.status === 403) throw new AccessError('access-denied');
         return bad();
       }
-      return response;
-    });
+      diagnostics.stage = 'response-validation';
+      return decode(response.body);
+    }, diagnostics);
   }
   async function profileSession(token: string, hints: SessionHints) {
     text(token);
@@ -66,16 +70,17 @@ export function createOpenpath(transport: OpenpathTransport, options: { namespac
       const key = `${orgId}/${userId}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const result = await send({ method: 'GET', path: `/orgs/${orgId}/users/${userId}`, token }, 200);
-      const value = data(result.body), identity = object(value.identity);
-      if (id(value.id) !== userId || String(id(identity.id)) !== hints.identityId) throw new AccessError('expired');
-      const email = text(identity.email);
-      if (user && user.email !== email) return bad();
-      user = { identityId: hints.identityId, email, name: text(identity.fullName ?? email) };
-      const associations = array(identity.users).map(object).filter((item) =>
-        item.id === userId && object(item.org).id === orgId);
-      if (associations.length !== 1) return bad();
-      memberships.push({ orgId, userId, organisation: text(object(associations[0].org).name) });
+      await send({ method: 'GET', path: `/orgs/${orgId}/users/${userId}`, token }, 200, (body) => {
+        const value = data(body), identity = object(value.identity);
+        if (id(value.id) !== userId || String(id(identity.id)) !== hints.identityId) throw new AccessError('expired');
+        const email = text(identity.email);
+        if (user && user.email !== email) return bad();
+        user = { identityId: hints.identityId, email, name: text(identity.fullName ?? email) };
+        const associations = array(identity.users).map(object).filter((item) =>
+          item.id === userId && object(item.org).id === orgId);
+        if (associations.length !== 1) return bad();
+        memberships.push({ orgId, userId, organisation: text(object(associations[0].org).name) });
+      });
     }
     if (!user) return bad();
     return { token, expiresAt: null, user, memberships };
@@ -83,22 +88,25 @@ export function createOpenpath(transport: OpenpathTransport, options: { namespac
   return {
     environment: 'live',
     async login(input) {
-      const response = await send({ method: 'POST', path: '/auth/login', body: { email: input.email, password: input.password,
+      const parsed = await send({ method: 'POST', path: '/auth/login', body: { email: input.email, password: input.password,
         ...(options.namespaceNickname ? { namespaceNickname: options.namespaceNickname } : {}),
-        ...(input.totpCode ? { mfa: { totpCode: input.totpCode } } : {}) } }, 201);
-      const value = data(response.body);
-      const token = text(value.token);
-      const identityId = id(value.identityId);
-      if (id(object(value.identity).id) !== identityId) return bad();
-      const expiresAt = date(value.expiresAt);
-      const memberships = array(value.tokenScopeList).flatMap((item) => {
-        const row = object(item);
-        if (row.org == null || row.user == null) return [];
-        const org = object(row.org), user = object(row.user);
-        if (org.id === null || user.id === null) return [];
-        return [{ orgId: id(org.id), userId: id(user.id) }];
+        ...(input.totpCode ? { mfa: { totpCode: input.totpCode } } : {}) } }, 201, (body) => {
+        const value = data(body);
+        const token = text(value.token);
+        const identityId = id(value.identityId);
+        if (id(object(value.identity).id) !== identityId) return bad();
+        const expiresAt = date(value.expiresAt);
+        const memberships = array(value.tokenScopeList).flatMap((item) => {
+          const row = object(item);
+          if (row.org == null || row.user == null) return [];
+          const org = object(row.org), user = object(row.user);
+          if (org.id === null || user.id === null) return [];
+          return [{ orgId: id(org.id), userId: id(user.id) }];
+        });
+        if (!memberships.length) return bad();
+        return { token, identityId, expiresAt, memberships };
       });
-      if (!memberships.length) return bad();
+      const { token, identityId, expiresAt, memberships } = parsed;
       return { ...await profileSession(token, { identityId: String(identityId), associations: memberships }), expiresAt };
     },
     async checkSession(token, hints) {
@@ -106,46 +114,48 @@ export function createOpenpath(transport: OpenpathTransport, options: { namespac
       return profileSession(token, hints);
     },
     async listUserEntries(context) {
-      const response = await send({ method: 'GET', path: `${userPath(context)}/entries`, token: context.token }, 200);
-      try {
-        const value = object(JSON.parse(response.body));
-        const values = array(value.data);
-        const count = value.filteredCount ?? value.totalCount;
-        // This endpoint declares no pagination parameters. Never guess them or
-        // choose a door from a response that may omit another COE match.
-        if (!Number.isSafeInteger(count) || count !== values.length) return bad();
-        const result = values.map((item) => {
-          const entry = object(item), zone = object(entry.zone), site = object(zone.site);
-          return { id: id(entry.id), name: text(entry.name), zone: text(zone.name), site: text(site.name) };
-        });
-        if (new Set(result.map((entry) => entry.id)).size !== result.length) return bad();
-        return result;
-      } catch { return bad(); }
+      return send({ method: 'GET', path: `${userPath(context)}/entries`, token: context.token }, 200, (body) => {
+        try {
+          const value = object(JSON.parse(body));
+          const values = array(value.data);
+          const count = value.filteredCount ?? value.totalCount;
+          // This endpoint declares no pagination parameters. Never guess them or
+          // choose a door from a response that may omit another COE match.
+          if (!Number.isSafeInteger(count) || count !== values.length) return bad();
+          const result = values.map((item) => {
+            const entry = object(item), zone = object(entry.zone), site = object(zone.site);
+            return { id: id(entry.id), name: text(entry.name), zone: text(zone.name), site: text(site.name) };
+          });
+          if (new Set(result.map((entry) => entry.id)).size !== result.length) return bad();
+          return result;
+        } catch { return bad(); }
+      });
     },
     async listCredentials(context, offset) {
       if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10_000) return bad();
-      const response = await send({ method: 'GET', path: `${userPath(context)}/credentials?limit=100&offset=${offset}&sort=id&order=asc`, token: context.token }, 200);
-      try {
-        const page = object(JSON.parse(response.body));
-        const values = array(page.data);
-        const count = page.filteredCount ?? page.totalCount;
-        if (count !== undefined && (!Number.isSafeInteger(count) || (count as number) < offset + values.length ||
-            (!values.length && count !== offset))) return bad();
-        const items = values.map((item): Credential => {
-          const value = object(item);
-          const variants = ['mobile', 'card', 'pincode', 'cardMifareCsn', 'cardOpenpathDesfireEv1', 'cloudKey',
-            'fobAllegion', 'allegionMobile', 'licensePlate', 'wallet'].filter((key) => value[key] != null);
-          if (variants.length !== 1) return bad();
-          if (variants[0] !== 'licensePlate') id(object(value[variants[0]]).id);
-          return { id: id(value.id), kind: variants[0] === 'cloudKey' ? 'cloud-key' : variants[0] === 'mobile' ? 'mobile' : 'other',
-            validFrom: date(value.startDate), validUntil: date(value.endDate) };
-        });
-        return { items, nextOffset: items.length ? offset + items.length : null };
-      } catch { return bad(); }
+      return send({ method: 'GET', path: `${userPath(context)}/credentials?limit=100&offset=${offset}&sort=id&order=asc`, token: context.token }, 200, (body) => {
+        try {
+          const page = object(JSON.parse(body));
+          const values = array(page.data);
+          const count = page.filteredCount ?? page.totalCount;
+          if (count !== undefined && (!Number.isSafeInteger(count) || (count as number) < offset + values.length ||
+              (!values.length && count !== offset))) return bad();
+          const items = values.map((item): Credential => {
+            const value = object(item);
+            const variants = ['mobile', 'card', 'pincode', 'cardMifareCsn', 'cardOpenpathDesfireEv1', 'cloudKey',
+              'fobAllegion', 'allegionMobile', 'licensePlate', 'wallet'].filter((key) => value[key] != null);
+            if (variants.length !== 1) return bad();
+            if (variants[0] !== 'licensePlate') id(object(value[variants[0]]).id);
+            return { id: id(value.id), kind: variants[0] === 'cloudKey' ? 'cloud-key' : variants[0] === 'mobile' ? 'mobile' : 'other',
+              validFrom: date(value.startDate), validUntil: date(value.endDate) };
+          });
+          return { items, nextOffset: items.length ? offset + items.length : null };
+        } catch { return bad(); }
+      });
     },
     async unlockEntry(command) {
       await send({ method: 'POST', path: `${userPath(command.context)}/credentials/${id(command.credentialId)}/cloudKeyEntryUnlock`,
-        token: command.context.token, body: { entryId: id(command.entryId) } }, 204);
+        token: command.context.token, body: { entryId: id(command.entryId) } }, 204, () => undefined);
     },
   };
 }

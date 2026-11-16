@@ -38,9 +38,24 @@ test('outbound traces and logs cannot carry raw URLs, identifiers or arbitrary a
     'latch.operation': 'login', 'latch.result': 'accepted', email: 'private@example.com', password: 'fixture-password',
   } };
   const outbound = options.beforeSendLog!(log);
-  expect(outbound?.attributes).toEqual({ 'latch.operation': 'login', 'latch.result': 'accepted' });
+  expect(outbound?.attributes).toEqual({ 'latch.operation': 'login', 'latch.result': 'accepted', 'sentry.environment': 'production-live' });
   expect(options.beforeSendLog!({ ...log, message: 'password fixture-password' })).toBeNull();
   expect(options.beforeSendLog!({ ...log, message: 'Latch unlock outcome' })?.message).toBe('Latch unlock outcome');
+});
+
+test('diagnostic logs retain the packaged release and fixed environment while rejecting malformed metadata', () => {
+  const options = monitoringOptions({ development: false, mode: 'live' });
+  const outbound = options.beforeSendLog!({ level: 'warn', message: 'Latch operation failed', attributes: {
+    'sentry.release': 'com.mbeka02.latch@1.0.0+2', 'sentry.environment': 'private@example.com',
+    'latch.stage': Object.assign(new String('transport'), { password: 'fixture-password' }) as never,
+    'latch.error_code': 'fixture-token', 'http.response.status_code': 999,
+    email: 'private@example.com', password: 'fixture-password',
+  } });
+  expect(outbound?.attributes).toEqual({ 'sentry.release': 'com.mbeka02.latch@1.0.0+2', 'sentry.environment': 'production-live' });
+  const rejected = options.beforeSendLog!({ level: 'warn', message: 'Latch operation failed', attributes: {
+    'sentry.release': 'fixture-token', 'latch.duration_ms': Infinity,
+  } });
+  expect(rejected?.attributes).toEqual({ 'sentry.environment': 'production-live' });
 });
 
 test('controlled operation errors and a unique verification marker remain identifiable', async () => {

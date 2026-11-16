@@ -12,9 +12,17 @@ function errorMessage(value?: string) {
 function attributes(value: Record<string, unknown> = {}) {
   const safe: Record<string, string | number> = {};
   if (operations.includes(value['latch.operation'] as MonitoredOperation)) safe['latch.operation'] = value['latch.operation'] as string;
-  if (['started', 'accepted', 'denied', 'unknown', 'not-sent', 'failed'].includes(String(value['latch.result']))) safe['latch.result'] = value['latch.result'] as string;
+  if (typeof value['latch.result'] === 'string' && ['started', 'accepted', 'denied', 'unknown', 'not-sent', 'failed'].includes(value['latch.result'])) safe['latch.result'] = value['latch.result'];
   if (typeof value['latch.duration_ms'] === 'number' && Number.isFinite(value['latch.duration_ms']) && value['latch.duration_ms'] >= 0)
     safe['latch.duration_ms'] = value['latch.duration_ms'];
+  if (typeof value['latch.stage'] === 'string' && ['transport', 'timeout', 'response-status', 'response-validation'].includes(value['latch.stage']))
+    safe['latch.stage'] = value['latch.stage'];
+  if (typeof value['latch.error_code'] === 'string' && ['invalid-credentials', 'mfa-required', 'mfa-invalid', 'unsupported-auth', 'access-denied', 'expired',
+    'unavailable', 'storage', 'attempt-storage', 'request-not-sent'].includes(value['latch.error_code']))
+    safe['latch.error_code'] = value['latch.error_code'];
+  const status = value['http.response.status_code'];
+  if (typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599)
+    safe['http.response.status_code'] = status;
   return safe;
 }
 
@@ -59,7 +67,11 @@ export function monitoringOptions({ dsn, development, mode }: Configuration): Re
     },
     beforeSendLog(log) {
       if (!['Latch operation started', 'Latch operation completed', 'Latch operation failed', 'Latch unlock outcome'].includes(log.message)) return null;
-      return { level: log.level, message: log.message, severityNumber: log.severityNumber, attributes: attributes(log.attributes) };
+      const safe = attributes(log.attributes);
+      safe['sentry.environment'] = `${development ? 'development' : 'production'}-${mode}`;
+      const release = log.attributes?.['sentry.release'];
+      if (typeof release === 'string' && /^com\.mbeka02\.latch@\d+\.\d+\.\d+\+\d+$/.test(release)) safe['sentry.release'] = release;
+      return { level: log.level, message: log.message, severityNumber: log.severityNumber, attributes: safe };
     },
     beforeSendSpan(span) {
       return { trace_id: span.trace_id, span_id: span.span_id, parent_span_id: span.parent_span_id,
