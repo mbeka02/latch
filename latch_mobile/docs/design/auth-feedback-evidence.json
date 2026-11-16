@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "latch.auth-feedback.v1",
+  "date": "2026-11-16",
+  "platform": "android",
+  "scope": "Password preservation, separate MFA step, shared inline errors and async button feedback",
+  "sources": [
+    {
+      "path": "../../src/app/index.tsx",
+      "sha256": "325d5413a1fcff76d82c27302faf22b0c4d5e98a8c38e0100af78c178df38e1c"
+    },
+    {
+      "path": "../../src/app/door.tsx",
+      "sha256": "50123c924cd2c28a40cb13110d023ff40c4e52e1e95745726d38662bb1935001"
+    },
+    {
+      "path": "../../src/app/_layout.tsx",
+      "sha256": "40e1cd751f3e82a922c438f517c45e3756fcc5c51b213efe96d1cf83ebed2021"
+    },
+    {
+      "path": "../../src/components/action-button.tsx",
+      "sha256": "7967fe66762b26da54e121cb9d71b7c3a30fe223f903ab9e36ab7e105aaa47cd"
+    },
+    {
+      "path": "../../src/components/inline-message.tsx",
+      "sha256": "ca4de764228da9408a7a38fe21afa5627869017896e4953246a561ec13fdf339"
+    },
+    {
+      "path": "../../src/components/route-error.tsx",
+      "sha256": "0db41b64de99fdbdfd2eab20aad89fc289bbd9ef378fadef20e1a4b7e2a62884"
+    },
+    {
+      "path": "../../src/constants/theme.ts",
+      "sha256": "f5f6e8e9673988e21dabbc9548ed1f1aea83610c91e2cbd56a48c984a606b7bf"
+    },
+    {
+      "path": "../../src/lib/access-error.ts",
+      "sha256": "86109af559ae0b1107525e930e96ccef2d5fa552434b07e48d11ecf25dd7694f"
+    },
+    {
+      "path": "../../src/__tests__/launch.test.tsx",
+      "sha256": "f4baf150074f98a9c07420564f3b455103398f73a5682827060aca15967ffd47"
+    }
+  ],
+  "automated": {
+    "status": "passed",
+    "tests": 156,
+    "suites": 7,
+    "commands": [
+      "npm test -- --silent",
+      "npm run typecheck",
+      "CI=1 node /home/mbeka02/.npm/_npx/5dd0285af1583b84/node_modules/@expo/agent-cli/bin/cli.js lint"
+    ],
+    "states": [
+      "Pending and failed login retains password; input hidden/locked; duplicate press suppressed",
+      "Demo MFA code-only step; rejected code corrected without retyping password",
+      "Live MFA selection/edit makes no HTTP request; verification submits credentials and TOTP together",
+      "Cancel pending MFA clears secrets and ignores late successful response",
+      "Existing unlock, refresh, acknowledgement, expiry, storage recovery and screen-error journeys"
+    ]
+  },
+  "native": {
+    "status": "pending",
+    "captures": [],
+    "reason": "No emulator, app server or new build authorized for this correction.",
+    "targetViewportDp": {
+      "width": 360,
+      "height": 780
+    },
+    "checks": [
+      "Light/dark inline feedback and compact button layout",
+      "Large system text, keyboard reachability and scrolling",
+      "Code paste/autofill and Android Back",
+      "Screen-reader errors and busy-state announcements",
+      "Live supported-account MFA and full device journey"
+    ]
+  },
+  "buildCreated": false,
+  "realAltaRequestsMade": false,
+  "visualMatchClaimed": false
+}
