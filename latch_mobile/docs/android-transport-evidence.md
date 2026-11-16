@@ -31,6 +31,8 @@ Use your Gradle installation or cached distribution; no generated root `android/
 
 ## Evidence boundaries / phase 6
 
+**2026-11-16 phase 6 update:** EAS build [`fa6ab713-730e-40e5-b92e-c7fbe71da71f`](https://expo.dev/accounts/mbeka02/projects/latch/builds/fa6ab713-730e-40e5-b92e-c7fbe71da71f) successfully compiled the Java transport and Kotlin Expo bridge in the signed release APK. Post-success Gradle dependency-insight tasks resolve OkHttp `4.9.2` and Okio/Okio JVM `3.16.0`, matching a fresh run of all ten native fixtures. APK inspection finds the retained native module name and fixed HTTPS origin in DEX; R8 obfuscates original class names. These checks establish native build/packaging and the resolved graph, not Android runtime registration, OS-level storage/interruption behavior or real TLS traffic on a phone. See [the phase 6 handoff](phase-6-handoff.md) and [APK evidence](apk-evidence.json). The bullets below describe the original phase 5 boundary; the native build/dependency items are now superseded by this update, while device/tenant checks remain pending.
+
 - Expo Android autolinking resolves `expo.modules.latchopenpathtransport.LatchOpenpathTransportModule` from the local module. This is discovery evidence, not native compilation.
 - The live-mode Android production JavaScript/Hermes export passed. A JavaScript export is not an APK or a Kotlin/native build.
 - The native module is absent in Expo Go, iOS and web. Live authentication fails closed there; no generic-fetch or demo fallback exists. Default demo mode continues to work in compatible Expo Go.

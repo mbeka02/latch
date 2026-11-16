@@ -1,6 +1,6 @@
 # Latch
 
-Android-first Expo / React Native app for the IFSS assessment. **Phase 5 implements the direct Openpath adapter and isolated Android transport.** Default demo mode makes no Alta requests and operates no physical door. Live APK/device and IFSS tenant verification remain phase 6 work; no backend is required.
+Android-first Expo / React Native app for the IFSS assessment. Phase 5 implements the direct Openpath adapter and isolated Android transport. **Phase 6 uses EAS to build a signed live preview APK.** Default local demo mode makes no Alta requests and operates no physical door. Device and IFSS tenant verification remain separate acceptance checks; no backend is required.
 
 ## App branding and launch
 
@@ -15,6 +15,18 @@ The launcher icon, app label and native splash require a new APK. Expo Go cannot
 Starter logos, badges, tab illustrations, animation components and the project-reset script have been removed. The generated `/_sitemap` route is disabled. Invalid links and caught screen errors use Latch guidance and recovery controls; raw error details are not displayed. Caught errors still pass through Sentry's privacy policy. The evaluator APK must be a standalone release build: Expo Go and development builds retain host/developer UI that is not part of Latch's release interface. Release packaging and device checks remain phase 6 work.
 
 Access screens hide the navigation title bars and apply explicit safe-area padding. The sign-in title lives in the form, beneath the standalone Latch mark, with the general label **Building access**. Space Grotesk is bundled locally in Regular, Medium and Bold for text, fields, modals, splash lettering and notifications; its license and provenance are in `assets/fonts/`. Demo credentials and MFA examples appear below the form only in demo mode; live mode shows a concise Alta prompt and the SSO limitation. A local architectural line pattern references IFSS's building imagery and appears on sign-in only. Its slow, decorative movement runs only while the sign-in screen is focused and the app is active; reduced motion keeps it static. Other screens have a plain background. Both themes share the form spacing, control radius and brand palette. See [the design notes and verification limits](docs/design/sign-in-review.md).
+
+## EAS live preview (phase 6)
+
+The `preview` profile builds a signed release APK for direct installation. It explicitly selects **live** mode, uses `com.mbeka02.latch`, disables Android backup, and requires neither Metro nor a development client. It retains individual Alta authentication and COE-only discovery. No store submission or backend setup is required.
+
+```sh
+npx eas-cli@latest build --platform android --profile preview
+```
+
+The first build completed successfully: **[download Latch 1.0.0 (2), live APK](https://expo.dev/artifacts/eas/j_rbB_uEFR9av5b5docxYQpMfo8CDNWsvjQlkf25eDI.apk)** or open [its EAS build page](https://expo.dev/accounts/mbeka02/projects/latch/builds/fa6ab713-730e-40e5-b92e-c7fbe71da71f). See [the phase 6 handoff](docs/phase-6-handoff.md) for signature/manifest evidence, install/device checks and IFSS acceptance steps. Build numbers and signing are managed by EAS. The public Sentry DSN is configured in the EAS preview environment; source-map upload failed because the build auth token is absent, and real-event verification remains pending.
+
+Use supported real Alta credentials only in the live candidate; the fictional accounts below belong to demo mode. A build passing compilation does not establish IFSS account compatibility or physical door operation.
 
 ## Try the demo
 
@@ -61,7 +73,7 @@ Use fictional credentials in the default demo build. Its in-process mock cannot 
 
 Build configuration selects `EXPO_PUBLIC_LATCH_MODE=demo` (default when omitted) or `EXPO_PUBLIC_LATCH_MODE=live`. There is no in-app environment switch and no fallback after a live error. An invalid mode stops initialization. `EXPO_PUBLIC_ALTA_NAMESPACE` optionally supplies a confirmed namespace nickname; omit it when unnecessary. These are public build settings, never credentials. The host is fixed in native code to `https://api.openpath.com/`; there is no configurable API URL, shared key or evaluator-entered entry ID.
 
-Live mode requires an Android build containing the local Expo module. **Expo Go, web and iOS do not provide that client**: requests fail closed rather than using generic fetch or demo data. The standalone APK and native bridge still need phase 6 compilation/device verification before real credentials are used. Evaluators will need only the resulting verified APK and their supported Alta account, not these developer settings.
+Live mode requires an Android build containing the local Expo module. **Expo Go, web and iOS do not provide that client**: requests fail closed rather than using generic fetch or demo data. The phase 6 EAS build compiles and packages the bridge; phone/runtime and IFSS acceptance checks remain pending. Evaluators need the resulting APK and their supported Alta account, not these developer settings.
 
 The live form offers **Use authenticator code** before the first attempt. Enter a current six-digit TOTP if the account requires it; re-enter the password/code after a rejection. The documented API supports the submitted TOTP field, but its public schemas do not establish specific MFA-required, invalid-code or SSO error names. Live login errors therefore stay generic; the demo's automatic MFA challenge remains simulated. SSO-only sign-in is explicitly unsupported. `forMobileLogin` is omitted because its semantics are undocumented; a tenant requirement for it must be resolved with supported evidence.
 
@@ -77,7 +89,7 @@ See [official API contract evidence](docs/openpath-contract-evidence.md) and [An
 
 The Sentry SDK, approved `mbeka02/latch-mobile` project, public local DSN, error privacy policy, navigation/API tracing and structured outcome logs are configured. Traces use 100% sampling in development and 10% in production. Request bodies/headers, employee details and arbitrary error/log context are excluded from JavaScript telemetry; replay and screenshot capture are off. Monitoring failures cannot repeat or change an unlock.
 
-**Real-app receipt and native/release verification remain pending.** No test issue has been claimed as received, and no emulator or app dev server was started. See [monitoring configuration, phone verification and production gates](docs/sentry-monitoring.md). Sentry source-map upload still needs a build-only auth token in the phase 6 build environment; it is never an APK/public environment variable.
+**Real-app receipt and native/release runtime verification remain pending.** The Sentry-enabled release APK compiles, but no test issue has been claimed as received, and no emulator or app dev server was started. See [monitoring configuration, phone verification and production gates](docs/sentry-monitoring.md). Source-map upload failed without a build-only auth token in the EAS environment; that token must never be an APK/public environment variable.
 
 ## Implementation
 
@@ -92,7 +104,7 @@ Resolved organisation/entry/credential IDs stay in provider data and private Lat
 
 The COE filter uses trimmed, case-insensitive exact matching for **COE Door** and preserves the provider's original display name. Unrelated entries and similarly named annexes are never fallback choices. Several matches require distinguishable site/zone context and an explicit choice. Indistinguishable entries, or missing/duplicate organisation names, stop with IFSS guidance.
 
-Credential pages are read to completion before deciding. The normalized adapter contract exposes `items` and `nextOffset`, with epoch-millisecond validity bounds (`null` means unbounded). Only a Cloud Key whose start is reached and end has not been reached qualifies. Missing, future-dated, expired, malformed or multiple usable keys block readiness. Discovery does not provision credentials or arbitrarily pick the first key. Non-advancing pagination and more than 100 pages fail safely. The demo uses two items per page; the live JSON mapping remains phase 5 work.
+Credential pages are read to completion before deciding. The normalized adapter contract exposes `items` and `nextOffset`, with epoch-millisecond validity bounds (`null` means unbounded). Only a Cloud Key whose start is reached and end has not been reached qualifies. Missing, future-dated, expired, malformed or multiple usable keys block readiness. Discovery does not provision credentials or arbitrarily pick the first key. Non-advancing pagination and more than 100 pages fail safely. The demo uses two items per page; the live adapter requests 100 per page and continues until an empty response.
 
 Before dispatch, Latch rereads permitted entries and all credential pages using the selected organisation/user context. The chosen entry's identity and displayed context must still match, and the same Cloud Key must remain the single usable key. A changed entry/key invalidates readiness and requires refreshed access and confirmation. New discovery, organisation selection, account replacement and logout invalidate old door references; late discovery cannot overwrite a newer result. These local checks do not grant Remote Unlock permission: the provider's current authorization remains decisive.
 

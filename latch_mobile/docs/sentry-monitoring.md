@@ -41,6 +41,8 @@ The agent can then use the authenticated CLI to find that exact issue in `mbeka0
 
 ## Production build and source maps
 
+**2026-11-16 phase 6 update:** the Sentry-enabled EAS release APK compiled successfully with SDK `8.35.0`. Its public DSN is configured in the EAS preview environment. The cloud source-map task reports missing build authentication and exits successfully only because `SENTRY_ALLOW_FAILURE=true`; maps were **not uploaded**. Release/dist for that task are `com.mbeka02.latch@1.0.0+2` / `2`. Real-app receipt, runtime/native payload privacy and readable release stacks remain pending. See [the phase 6 handoff](phase-6-handoff.md). This supersedes the earlier native-compilation boundary, not the receipt/verification gate.
+
 The [official Expo setup](https://docs.sentry.io/platforms/react-native/guides/expo/) is applied manually: Sentry Metro configuration generates debug IDs; the Expo plugin identifies `mbeka02/latch-mobile` and configures native-build source-map upload. Only the two pinned Sentry CLI package install scripts were approved for local tooling; unrelated blocked scripts were left unchanged.
 
 An Android production JavaScript/Hermes export with source maps passed, and the map contains a Sentry debug ID. Upload was explicitly disabled during this check. **No production stack trace has been symbolicated or verified.** The native APK/ProGuard or native-symbol upload path has not been exercised.
