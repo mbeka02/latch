@@ -147,7 +147,7 @@ IFSS retains its credentials and provisioning responsibilities. Once the native 
 5. Verify an appropriately configured denied account/permission case. Capture redacted results; permission provisioning or timing is an IFSS/vendor matter, not something Latch bypasses.
 6. Check logout, expiry, refresh and reconnect do not replay an operation. An unknown result requires checking the door and acknowledging uncertainty before a fresh confirmed attempt.
 
-Use the fictional scenarios in [the README](../README.md#try-the-demo) only with a separately labelled demo build. Fictional credentials do not authenticate in this live APK.
+Use the fictional scenarios in [the README](../../README.md#try-the-demo) only with a separately labelled demo build. Fictional credentials do not authenticate in this live APK.
 
 ## Completion boundary
 
