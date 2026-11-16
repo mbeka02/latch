@@ -14,7 +14,7 @@ The replacement live preview **1.0.0 (3)** finished successfully on 2026-11-16. 
 
 See [diagnostics artifact evidence](apk-diagnostics-evidence.json) and [sign-in investigation / Logs instructions](sentry-monitoring.md#investigating-sign-in-failures). The original preview's evidence and outstanding acceptance checklist are retained below; original artifact details refer to version code **2**.
 
-**Regional follow-up:** the user's portal is European; official documentation identifies a separate EU API host. A local EU login probe returned the same rejection as the US attempt. The regional probe option and monitoring improvements are retained, but this APK still pins the US API host. Application-level regional routing and a known-working IFSS account test remain necessary before treating EU evaluator compatibility as verified. See [regional findings](openpath-contract-evidence.md#regional-host-investigation--2026-11-16).
+**Regional follow-up:** the user's portal is European; official documentation identifies a separate EU API host. Earlier local probes omitted the region flag and used the US default, so the earlier claimed US/EU comparison is superseded. The user reports the result still does not change and supplies provider rejection `H-3120`; correlate the printed host with future probe output before treating a regional comparison as controlled. The probe now requires an explicit region. Monitoring improvements are retained, but this APK still pins the US API host. Application-level regional routing and a known-working IFSS account test remain necessary before treating EU evaluator compatibility as verified. See [regional findings](openpath-contract-evidence.md#regional-host-investigation--2026-11-16).
 
 ## Original preview delivery status
 
