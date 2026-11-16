@@ -43,10 +43,19 @@
     "release": "com.mbeka02.latch@1.0.0+3",
     "dist": "3",
     "sourceMapUpload": "failed: build auth token absent; SENTRY_ALLOW_FAILURE allowed build completion",
-    "newDiagnosticLogReceiptVerified": false
+    "newDiagnosticLogReceiptVerified": true,
+    "receivedLoginDiagnostic": {
+      "timestampUtc": "2026-11-16T12:19:17Z",
+      "environment": "production-live",
+      "result": "denied",
+      "stage": "response-status",
+      "httpStatus": 400,
+      "durationMs": 1597,
+      "classificationInSentry": "[Filtered]"
+    }
   },
   "limitations": [
-    "New APK installation and runtime diagnostic delivery require a fresh user attempt.",
+    "The user retried the new APK; receipt of the login diagnostic is verified. Successful authentication and subsequent app journeys remain unverified.",
     "Existing login warnings establish HTTP rejection, not its account-specific cause.",
     "Native payload privacy and readable release stacks remain unverified."
   ]

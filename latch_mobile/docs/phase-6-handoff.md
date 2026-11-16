@@ -9,10 +9,12 @@ The replacement live preview **1.0.0 (3)** finished successfully on 2026-11-16. 
 - [Download the replacement APK](https://expo.dev/artifacts/eas/TSzvftu4AIHtISV0SsjCZ1lj20PkvYyUr-ie3Vfqpjc.apk) · [EAS build `a4a32b60-bf6b-4843-bc03-51397ca68e35`](https://expo.dev/accounts/mbeka02/projects/latch/builds/a4a32b60-bf6b-4843-bc03-51397ca68e35).
 - Source commit `5825356`; diagnostics fix `83593a0`. APK size **113,122,631 bytes**; SHA-256 `d2d61839b730e147755a65751f0251831623f0314bee7912798c9ce5da3cf07a`.
 - Signature verified and certificate matches the original APK. Package/version `com.mbeka02.latch` / `1.0.0` (`3`), non-debuggable and `allowBackup=false`. Packaged Hermes strings include the new diagnostic fields; DEX contains the native transport module name. The release dependency-insight tasks again resolve OkHttp `4.9.2` and Okio `3.16.0`.
-- **153 tests / seven suites**, lint and typecheck passed. Existing auth denials were received in Sentry, but the new APK's diagnostic delivery requires a fresh phone attempt. No new real Alta request or physical door operation was made by the agent.
+- **153 tests / seven suites**, lint and typecheck passed. The user's retry verified new diagnostic delivery from release `com.mbeka02.latch@1.0.0+3`: HTTP 400 at the login response-status stage, duration 1597 ms. Sentry filtered the classification label. Successful authentication is not established. No new real Alta request or physical door operation was made by the agent.
 - Sentry source-map upload still failed because the build token is absent. Task release/dist are `com.mbeka02.latch@1.0.0+3` / `3`; readable release stacks and native payload privacy remain unverified.
 
 See [diagnostics artifact evidence](apk-diagnostics-evidence.json) and [sign-in investigation / Logs instructions](sentry-monitoring.md#investigating-sign-in-failures). The original preview's evidence and outstanding acceptance checklist are retained below; original artifact details refer to version code **2**.
+
+**Regional follow-up:** the user's portal is European; official documentation identifies a separate EU API host. A local EU login probe returned the same rejection as the US attempt. The regional probe option and monitoring improvements are retained, but this APK still pins the US API host. Application-level regional routing and a known-working IFSS account test remain necessary before treating EU evaluator compatibility as verified. See [regional findings](openpath-contract-evidence.md#regional-host-investigation--2026-11-16).
 
 ## Original preview delivery status
 
