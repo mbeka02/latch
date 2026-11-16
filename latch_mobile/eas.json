@@ -18,8 +18,7 @@
       "env": {
         "EXPO_PUBLIC_LATCH_MODE": "live",
         "EXPO_PUBLIC_ALTA_NAMESPACE": "org:ifss-group",
-        "EXPO_PUBLIC_SENTRY_VERIFY": "0",
-        "SENTRY_ALLOW_FAILURE": "true"
+        "EXPO_PUBLIC_SENTRY_VERIFY": "0"
       }
     }
   }

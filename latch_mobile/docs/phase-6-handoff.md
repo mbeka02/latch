@@ -2,6 +2,8 @@
 
 Prepared 2026-11-16. The user selected a **live preview first**.
 
+**Subsequent source-map setup:** EAS preview now has a dedicated build-only `SENTRY_AUTH_TOKEN` secret. The preview profile no longer allows Sentry upload failures. An older local Android Hermes export was uploaded and server processing verified; no replacement APK was built and no matching release stack was verified. See [monitoring evidence](sentry-monitoring.md#upload-authentication-configured--2026-11-16). The empty, untracked `latch_backend` folder was removed; Latch continues to call Alta directly.
+
 ## Latest profile-compatible preview — 1.0.0 (5)
 
 EAS build [`9779f600-bba3-423a-a1ed-b68dfd71245e`](https://expo.dev/accounts/mbeka02/projects/latch/builds/9779f600-bba3-423a-a1ed-b68dfd71245e) **finished successfully** on 2026-11-16 at **19:28 Nairobi / 16:28 UTC**. [Download Latch 1.0.0 (5)](https://expo.dev/artifacts/eas/GFGhv_b3mtd6F43HoLwCZiXmiDJ3XhkR-59Wy9IQycY.apk).

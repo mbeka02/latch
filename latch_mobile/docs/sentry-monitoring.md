@@ -43,7 +43,7 @@ Response parsing and consistency checks now run inside the monitored endpoint op
 
 In Sentry, open **Explore → Logs**, select **latch-mobile**, widen the time range and search `latch.operation:login`. For the original attempts, leave the environment filter at **All** because their environment was stripped. Add columns for `latch.result`, `latch.stage`, `http.response.status_code`, `latch.error_code`, `latch.duration_ms`, `environment` and `release`. Search `latch.operation:session-check` separately to investigate successful authentication followed by a rejected or malformed profile response. Expected denials appear in Logs rather than Issues. Traces are sampled, so a missing trace does not mean the request did not occur. See [Sentry's structured logging guide](https://docs.sentry.io/platforms/react-native/logs/).
 
-These changes require a new running bundle/build; they do not modify the previously distributed APK. Source-map upload authentication remains a separate outstanding issue: missing maps affect readable stacks, and cannot recover HTTP statuses that were never recorded.
+These changes require a new running bundle/build; they do not modify the previously distributed APK. Source-map upload authentication was subsequently configured as documented below. Missing maps in older APKs affect readable stacks, and cannot recover HTTP statuses that were never recorded.
 
 **Expo Go limitation:** live mode uses the local `LatchOpenpathTransport` native module. Expo Go does not contain that module, so live sign-in fails before sending HTTP. Metro can serve the live UI in Expo Go, but actual Alta sign-in testing requires a Latch Android development build or a rebuilt preview APK. Do not substitute a different HTTP client merely to make Expo Go login work; it would bypass the reviewed redirect/retry policy. See [Expo's development build documentation](https://docs.expo.dev/develop/development-builds/introduction/).
 
@@ -65,13 +65,24 @@ The agent can then use the authenticated CLI to find that exact issue in `mbeka0
 
 ## Production build and source maps
 
+### Upload authentication configured — 2026-11-16
+
+Created a dedicated Sentry organization CI token named `latch-eas-preview` with `org:ci` scope and stored it as the project-scoped EAS **secret** `SENTRY_AUTH_TOKEN`, available only in the **preview** environment. The token is not in this repository or application configuration. Keep it build-only; other build environments need their own explicit configuration.
+
+Removed `SENTRY_ALLOW_FAILURE=true` from the preview profile. The inspected EAS preview environment had no override for that flag. Future preview builds therefore treat source-map upload failures as build failures instead of silently shipping without maps. The existing Sentry Expo plugin and Metro debug-ID configuration remain in use.
+
+Verified authentication with the official installed `@sentry/expo-upload-sourcemaps` tool against the previously generated Android Hermes export, then waited for server processing with `sentry-cli sourcemaps upload --wait-for 45`. Sentry confirmed **File processing complete** for artifact bundle `ccbe9e80-3965-50d1-9783-86659e92a2d8`, debug ID `7845e2d8-9636-4e87-a8d0-b869d6df3483`, in `mbeka02/latch-mobile`. This was an upload check using an older local export, with no release/dist association. It does **not** establish that its maps match preview 5 or repair that APK's stacks.
+
+No new APK build, app launch or error event was triggered. Lint and typecheck passed. On the next requested preview build, inspect the automatic native-build upload log and verify a fresh matching release-build stack in Sentry before declaring symbolication complete. Historical build results below remain unchanged.
+
+
 **2026-11-16 phase 6 update:** the Sentry-enabled EAS release APK compiled successfully with SDK `8.35.0`. Its public DSN is configured in the EAS preview environment. The cloud source-map task reports missing build authentication and exits successfully only because `SENTRY_ALLOW_FAILURE=true`; maps were **not uploaded**. Release/dist for that task are `com.mbeka02.latch@1.0.0+2` / `2`. Real-app receipt, runtime/native payload privacy and readable release stacks remain pending. See [the phase 6 handoff](phase-6-handoff.md). This supersedes the earlier native-compilation boundary, not the receipt/verification gate.
 
 The [official Expo setup](https://docs.sentry.io/platforms/react-native/guides/expo/) is applied manually: Sentry Metro configuration generates debug IDs; the Expo plugin identifies `mbeka02/latch-mobile` and configures native-build source-map upload. Only the two pinned Sentry CLI package install scripts were approved for local tooling; unrelated blocked scripts were left unchanged.
 
 An Android production JavaScript/Hermes export with source maps passed, and the map contains a Sentry debug ID. Upload was explicitly disabled during this check. **No production stack trace has been symbolicated or verified.** The native APK/ProGuard or native-symbol upload path has not been exercised.
 
-For phase 6, configure the public DSN in the selected build environment and put a build-only `SENTRY_AUTH_TOKEN` in the corresponding EAS secret environment. Do not use `EXPO_PUBLIC_` for it, commit it, paste it into chat, or reuse the one-time handoff/setup codes. The local onboarding CLI login is not proof that native build uploads are authenticated. Verify the packaged release/dist, resolved native dependencies, source-map upload and a fresh readable release-build event before declaring production monitoring complete. Uploading/deploying an APK remains phase 6 work.
+The preview environment now contains the public DSN and build-only `SENTRY_AUTH_TOKEN` secret. For another build environment, configure these separately. Do not use `EXPO_PUBLIC_` for it, commit it, paste it into chat, or reuse the one-time handoff/setup codes. The local onboarding CLI login is not proof that native build uploads are authenticated. Verify the packaged release/dist, resolved native dependencies, source-map upload and a fresh readable release-build event before declaring production monitoring complete. Uploading/deploying an APK remains phase 6 work.
 
 ## Automated evidence
 
