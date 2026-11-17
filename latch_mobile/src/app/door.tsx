@@ -43,6 +43,7 @@ function DoorIdentity({ door }: { door: DoorChoice }) {
         <ThemedText selectable type="small" themeColor="textSecondary">
           {door.organisation} · {door.site} · {door.zone}
         </ThemedText>
+        {door.showEntryId ? <ThemedText selectable type="small" themeColor="textSecondary">Entry #{door.entryId}</ThemedText> : null}
       </View>
     </View>
   );
@@ -75,7 +76,7 @@ export default function DoorScreen() {
     : '';
   const showOutcome = outcome && (unlockState.status !== 'accepted' || (state.status === 'ready' &&
     state.door.organisation === unlockState.door?.organisation && state.door.site === unlockState.door.site &&
-    state.door.zone === unlockState.door.zone && state.door.name === unlockState.door.name));
+    state.door.zone === unlockState.door.zone && state.door.name === unlockState.door.name && state.door.entryId === unlockState.door.entryId));
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -107,7 +108,7 @@ export default function DoorScreen() {
           // Keep the visible context, but replace its invalidated choice key with
           // the newly discovered choice. Missing/changed contexts need selection.
           const selected = previous.status === 'ready' ? doors.find((door) =>
-            door.organisation === previous.door.organisation && door.name === previous.door.name &&
+            door.entryId === previous.door.entryId && door.organisation === previous.door.organisation && door.name === previous.door.name &&
             door.site === previous.door.site && door.zone === previous.door.zone) : undefined;
           return selected ? { status: 'ready', door: selected, choices: doors }
             : doors.length === 1 ? { status: 'ready', door: doors[0], choices: doors } : { status: 'doors', choices: doors };
@@ -198,7 +199,7 @@ export default function DoorScreen() {
           overflow: 'hidden', backgroundColor: theme.backgroundElement }}>
           {state.choices.map((choice, index) => <Pressable key={choice.key}
             accessibilityRole="button"
-            accessibilityLabel={`${choice.name} · ${choice.site} · ${choice.zone}`}
+            accessibilityLabel={`${choice.name} · ${choice.site} · ${choice.zone}${choice.showEntryId ? ` · Entry #${choice.entryId}` : ''}`}
             accessibilityState={{ disabled: confirmingSignOut || refreshing }}
             disabled={confirmingSignOut || refreshing}
             onPress={() => setState({ status: 'ready', door: choice, choices: state.choices })}
@@ -250,6 +251,7 @@ export default function DoorScreen() {
               <ActionButton label="Cancel" secondary onPress={() => setConfirming(false)} />
             </>}>
             <ThemedText themeColor="textSecondary">{state.door.organisation} · {state.door.site} · {state.door.zone}</ThemedText>
+            {state.door.showEntryId ? <ThemedText type="small" themeColor="textSecondary">Entry #{state.door.entryId}</ThemedText> : null}
             <ThemedText>{simulated ? 'Demo only. No physical door will be operated.' : 'This requests a real door unlock using your Alta permissions.'}</ThemedText>
           </AppModal>
         </>
@@ -263,6 +265,7 @@ export default function DoorScreen() {
       {unlockState.status === 'unknown' && unlockState.door ? <>
         <ThemedText selectable themeColor="textSecondary">
           Previous request: {unlockState.door.name} · {unlockState.door.organisation} · {unlockState.door.site} · {unlockState.door.zone}
+          {unlockState.door.showEntryId && unlockState.door.entryId ? ` · Entry #${unlockState.door.entryId}` : ''}
         </ThemedText>
         {unlockState.requiresAcknowledgement ? <>
           <ThemedText>Check the door before acknowledging. This will not send another unlock request.</ThemedText>

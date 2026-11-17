@@ -1,5 +1,9 @@
 # Door screen
 
+## Same-label entries — 2026-11-17
+
+Different entry IDs remain separate choices even when their names, site and zone match. Only colliding visible labels receive a small **Entry #ID** reference, carried into the selected card, confirmation and unresolved-request context. Refresh preserves the selected ID as well as its labels, so reordering identical-looking records cannot select another door. Identical repeated records of one ID collapse to one choice; conflicting metadata for one ID remains an invalid response. Router tests exercise selection of the second same-label door, reordered refresh, confirmation and dispatch to that exact ID. Existing stored unlock records are compatible: their known top-level entry ID supplies the missing display reference on restore. No discovery source or unlock permission policy changes.
+
 The user’s [720 × 1560 phone screenshot](door-before-compact.png) is the baseline for this scoped density refinement. Preserve its Latch mark, Space Grotesk type, red accent, Account control and plain light/dark background. The approved change is to replace the oversized door heading/illustration panel with compact icon-led rows suitable for multiple doors. The earlier [1016 × 1548 generated concept](door-target.png) is superseded; it is not evidence of the current layout or a runtime capture.
 
 The header places **Account** beside the mark. It opens the existing animated `AppModal` as **Your account**, with the full selectable email, **Sign out** and **Cancel**. Opening the dialog only reveals account controls; sign-out executes only when its explicit action is pressed. Android Back and backdrop dismissal use the same close callback as Cancel. Account remains available on loading, unavailable and unconfirmed-result states, but is disabled while an unlock request or another confirmation is active. No drawer, additional route or native dependency was introduced.

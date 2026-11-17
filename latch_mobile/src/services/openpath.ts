@@ -1,6 +1,7 @@
 import { AccessError } from '@/lib/access-error';
 import type { Openpath, SessionHints, UserSession, Membership, UserContext, Credential } from '@/lib/openpath';
 import { observeOperation, reportEntryDiscovery, type OperationDiagnostics } from '@/monitoring/operations';
+import { uniqueEntries } from '@/lib/entry-discovery';
 
 function bad(): never { throw new AccessError('unavailable'); }
 function object(value: unknown): Record<string, unknown> {
@@ -141,9 +142,9 @@ export function createOpenpath(transport: OpenpathTransport, options: { namespac
             const entry = object(item), zone = object(entry.zone), site = object(zone.site);
             return { id: id(entry.id), name: text(entry.name), zone: text(zone.name), site: text(site.name) };
           });
-          if (new Set(result.map((entry) => entry.id)).size !== result.length) return bad();
+          const unique = uniqueEntries(result);
           reportEntryDiscovery(result);
-          return result;
+          return unique;
         } catch { return bad(); }
       });
     },

@@ -353,6 +353,7 @@ test.each(['COE', 'coe entrance', 'COE Door Intercom', 'Main entrance (CoE)'])('
 
   expect(await doors.discoverDoors()).toEqual([{
     key: expect.any(String),
+    entryId: 9876,
     name,
     organisation: 'IFSS demo',
     site: 'Assessment site',
@@ -425,14 +426,40 @@ test('distinct COE matches require an explicit choice with their original site a
 test.each([
   [{ id: 11, name: 'COE Door', site: 'Building', zone: 'Lab' }, { id: 12, name: 'COE Door', site: ' building ', zone: 'LAB' }],
   [{ id: 11, name: 'COE Door', site: '', zone: '' }, { id: 12, name: 'COE Door', site: '', zone: '' }],
-])('indistinguishable COE entries cannot become ready choices: %j', async (...entries) => {
+])('identically labelled entries remain separate choices identified by entry ID: %j', async (...entries) => {
   const provider = createMockOpenpath({ entries });
   const { auth, doors } = createTestLatch(provider);
   await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
 
-  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'ambiguous-entry' });
-  await expect(doors.requestUnlock('choice-1')).rejects.toThrow();
+  const choices = await doors.discoverDoors();
+  expect(choices).toMatchObject([{ entryId: 11, showEntryId: true }, { entryId: 12, showEntryId: true }]);
   expect(provider.getUnlockRequests()).toEqual([]);
+  await doors.requestUnlock(choices[1].key);
+  expect(provider.getUnlockRequests()).toEqual([{ orgId: 101, userId: 202, entryId: 12, credentialId: 404 }]);
+});
+
+test('differently named COE doors in one zone are both selectable without technical references', async () => {
+  const provider = createMockOpenpath({ entries: [
+    { id: 11, name: 'COE Front', site: 'Building', zone: 'Lab' },
+    { id: 12, name: 'COE Rear', site: 'Building', zone: 'Lab' },
+  ] });
+  const { auth, doors } = createTestLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const choices = await doors.discoverDoors();
+  expect(choices.map(({ name, entryId, showEntryId }) => ({ name, entryId, showEntryId }))).toEqual([
+    { name: 'COE Front', entryId: 11, showEntryId: undefined },
+    { name: 'COE Rear', entryId: 12, showEntryId: undefined },
+  ]);
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('a repeated record of the same entry produces one choice', async () => {
+  const entry = { id: 11, name: 'COE', site: 'Building', zone: 'Lab' };
+  const { auth, doors } = createTestLatch(createMockOpenpath({ entries: [entry, { ...entry }] }));
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  const choices = await doors.discoverDoors();
+  expect(choices).toMatchObject([{ entryId: 11 }]);
+  expect(choices).toHaveLength(1);
 });
 
 test('an expired Cloud Key cannot enable discovery', async () => {
@@ -548,7 +575,6 @@ test('organisation associations with indistinguishable names require IFSS clarif
 
 test.each([
   ['missing@latch.example', 'entry-not-found'],
-  ['ambiguous@latch.example', 'ambiguous-entry'],
   ['denied@latch.example', 'access-denied'],
 ])('the %s demo authenticates but cannot grant unavailable door access', async (email, code) => {
   const provider = createMockOpenpath();

@@ -1,7 +1,7 @@
 import type { Credential, Entry, Openpath, ProviderSession, SignInInput, UserContext, UserSession } from '@/lib/openpath';
 import { AccessError, safeAccessError, type AccessErrorCode } from '@/lib/access-error';
 import type { SessionStorage } from '@/lib/session-storage';
-import { isCoeEntryName } from '@/lib/entry-discovery';
+import { isCoeEntryName, uniqueEntries } from '@/lib/entry-discovery';
 
 const SESSION_CAP_MS = 15 * 60 * 1000;
 
@@ -25,6 +25,8 @@ export type SessionOptions = { now?: () => number; storage?: SessionStorage; att
 
 export type DoorChoice = {
   key: string;
+  entryId: number;
+  showEntryId?: boolean;
   name: string;
   organisation: string;
   site: string;
@@ -32,9 +34,11 @@ export type DoorChoice = {
 };
 
 export type OrganisationChoice = { key: string; name: string };
+// Older persisted unlock records predate the displayed entry reference.
+type DoorDetails = Omit<DoorChoice, 'key' | 'entryId'> & { entryId?: number };
 export type UnlockSnapshot = {
   status: 'idle' | 'pending' | 'accepted' | 'denied' | 'unknown' | 'not-sent';
-  door: Omit<DoorChoice, 'key'> | null;
+  door: DoorDetails | null;
   cooldownUntil: number;
   requiresAcknowledgement: boolean;
   error: AccessErrorCode | null;
@@ -42,7 +46,7 @@ export type UnlockSnapshot = {
 
 type AttemptRecord = {
   identityId: string; originStartedAt: number; orgId: number; userId: number; entryId: number;
-  door: Omit<DoorChoice, 'key'>; createdAt: number; cooldownUntil: number; unresolved: boolean;
+  door: DoorDetails; createdAt: number; cooldownUntil: number; unresolved: boolean;
 };
 
 export interface DoorAccessService {
@@ -59,7 +63,7 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
   let session: ProviderSession | null = null;
   let expiresAt = 0;
   let startedAt = 0;
-  let selections: { key: string; context: UserContext; entry: Entry; credentialId: number }[] = [];
+  let selections: { key: string; context: UserContext; entry: Entry; credentialId: number; showEntryId?: boolean }[] = [];
   let sequence = 0;
   let discovery = 0;
   let unresolved = false;
@@ -90,7 +94,10 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
             !['originStartedAt', 'createdAt', 'cooldownUntil'].every((field) => Number.isFinite(item[field]) && item[field] >= 0) ||
             !['orgId', 'userId', 'entryId'].every((field) => Number.isSafeInteger(item[field]) && item[field] > 0) ||
             typeof item.unresolved !== 'boolean' || !item.door ||
+            (item.door.entryId !== undefined && item.door.entryId !== item.entryId) ||
+            (item.door.showEntryId !== undefined && typeof item.door.showEntryId !== 'boolean') ||
             !['name', 'organisation', 'site', 'zone'].every((field) => typeof item.door[field] === 'string')) throw new Error();
+        item.door.entryId = item.entryId;
       }
       if (new Set(saved.records.map((item: AttemptRecord) => item.identityId)).size !== saved.records.length) throw new Error();
       attemptRecords = saved.records;
@@ -345,7 +352,8 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
         const operation = generation;
         const identityId = session.user.identityId;
         busy = true;
-        const displayDoor = { name: chosen.entry.name, organisation: chosen.context.membership.organisation,
+        const displayDoor = { name: chosen.entry.name, entryId: chosen.entry.id, showEntryId: chosen.showEntryId,
+          organisation: chosen.context.membership.organisation,
           site: chosen.entry.site, zone: chosen.entry.zone };
         publishUnlock('pending', displayDoor);
         let stopped = false;
@@ -379,7 +387,7 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
           ]), check);
           check();
           const keys = usableKeys(credentials);
-          const entry = entries.find((item) => item.id === chosen!.entry.id);
+          const entry = uniqueEntries(entries).find((item) => item.id === chosen!.entry.id);
           if (!selections.includes(chosen!) || !entry || entry.name !== chosen!.entry.name ||
               entry.site !== chosen!.entry.site || entry.zone !== chosen!.entry.zone ||
               keys.length !== 1 || keys[0].id !== chosen!.credentialId) {
@@ -389,8 +397,7 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
           const marker: AttemptRecord = {
             identityId, originStartedAt: startedAt,
             orgId: chosen!.context.membership.orgId, userId: chosen!.context.membership.userId, entryId: chosen!.entry.id,
-            door: { name: chosen!.entry.name, organisation: chosen!.context.membership.organisation,
-              site: chosen!.entry.site, zone: chosen!.entry.zone },
+            door: displayDoor,
             createdAt: now(), cooldownUntil: now() + 3000, unresolved: true,
           };
           await writeAttempts((records) => [...records.filter((item) => item.identityId !== identityId &&
@@ -457,17 +464,19 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
         assertCurrent(operation);
         currentSession();
         if (revision !== discovery) throw new AccessError('access-changed');
-        const matches = entries.filter((entry) => isCoeEntryName(entry.name));
+        const matches = uniqueEntries(entries).filter((entry) => isCoeEntryName(entry.name));
         const keys = usableKeys(credentials);
         if (!entries.length) throw new AccessError('entries-empty');
         if (!matches.length) throw new AccessError('entry-not-found');
-        const contexts = matches.map((entry) => JSON.stringify([entry.site.trim().toLowerCase(), entry.zone.trim().toLowerCase()]));
-        if (new Set(contexts).size !== matches.length) throw new AccessError('ambiguous-entry');
+        const contexts = matches.map((entry) => JSON.stringify([entry.name, entry.site, entry.zone].map((value) => value.trim().replace(/\s+/g, ' ').toLowerCase())));
+        const counts = new Map<string, number>();
+        contexts.forEach((context) => counts.set(context, (counts.get(context) ?? 0) + 1));
         if (keys.length !== 1) throw new AccessError('credential-unavailable');
-        return matches.map((entry) => {
+        return matches.map((entry, index) => {
           const key = `choice-${++sequence}`;
-          selections.push({ key, context, entry: { ...entry }, credentialId: keys[0].id });
-          return { key, name: entry.name, organisation: context.membership.organisation,
+          const reference = counts.get(contexts[index])! > 1 ? { showEntryId: true } : {};
+          selections.push({ key, context, entry: { ...entry }, credentialId: keys[0].id, ...reference });
+          return { key, entryId: entry.id, ...reference, name: entry.name, organisation: context.membership.organisation,
             site: entry.site, zone: entry.zone };
         });
       },

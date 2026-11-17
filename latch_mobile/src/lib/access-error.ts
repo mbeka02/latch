@@ -1,7 +1,7 @@
 export type AccessErrorCode =
   | 'invalid-credentials' | 'mfa-required' | 'mfa-invalid' | 'unsupported-auth'
   | 'unavailable' | 'invalid-response' | 'expired' | 'storage' | 'stale-operation' | 'access-denied' | 'entries-empty' | 'entry-not-found'
-  | 'organisation-required' | 'organisation-unavailable' | 'ambiguous-entry' | 'credential-unavailable' | 'access-changed'
+  | 'organisation-required' | 'organisation-unavailable' | 'credential-unavailable' | 'access-changed'
   | 'acknowledgement-required' | 'unlock-pending' | 'cooldown' | 'attempt-storage' | 'request-not-sent';
 
 const messages: Record<AccessErrorCode, string> = {
@@ -19,7 +19,6 @@ const messages: Record<AccessErrorCode, string> = {
   'entry-not-found': 'Alta returned entries, but none has the word COE in its name. Ask IFSS to confirm the door name and organisation.',
   'organisation-required': 'Choose an organisation before checking door access.',
   'organisation-unavailable': 'Organisation names are missing or ambiguous. Ask IFSS to clarify your memberships.',
-  'ambiguous-entry': 'COE Door matches cannot be distinguished by site and zone. Ask IFSS to clarify the entries.',
   'credential-unavailable': 'Exactly one currently valid Cloud Key is required. Ask IFSS to check your credentials.',
   'access-changed': 'Door access has changed. Refresh access and confirm the door again.',
   'acknowledgement-required': 'Check the previous unlock result and acknowledge it before trying again.',

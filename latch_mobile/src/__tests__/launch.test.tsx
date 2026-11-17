@@ -417,6 +417,32 @@ test('cancelling sign out keeps the employee signed in with door access', async 
   expect(provider.getUnlockRequests()).toEqual([]);
 });
 
+test('identical door labels show entry references through selection, refresh and confirmation', async () => {
+  const entries = [
+    { id: 11, name: 'COE Door', site: 'Main', zone: 'Lab' },
+    { id: 12, name: 'COE Door', site: 'Main', zone: 'Lab' },
+  ];
+  const provider = createMockOpenpath({ entries });
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'COE Door · Main · Lab · Entry #12' }));
+  expect(screen.getByText('Entry #12')).toBeOnTheScreen();
+  entries.reverse();
+  await fireEvent(screen.getByLabelText('Refresh door access'), 'refresh');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Unlock COE Door' })).toBeEnabled());
+  expect(screen.getByText('Entry #12')).toBeOnTheScreen();
+  expect(screen.queryByText('Entry #11')).not.toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Unlock COE Door' }));
+  const modal = await screen.findByTestId('app-modal');
+  expect(within(modal).getByText('Entry #12')).toBeOnTheScreen();
+  expect(provider.getUnlockRequests()).toEqual([]);
+  await fireEvent.press(within(modal).getByRole('button', { name: 'Unlock' }));
+  await waitFor(() => expect(provider.getUnlockRequests()).toEqual([{ orgId: 101, userId: 202, entryId: 12, credentialId: 404 }]));
+});
+
 test('the employee selects an organisation and a distinguishable COE door before confirming unlock', async () => {
   const provider = createMockOpenpath();
   const Layout = () => <RootLayout provider={provider} />;

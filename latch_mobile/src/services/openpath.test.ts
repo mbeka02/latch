@@ -229,10 +229,17 @@ test('an unresponsive transport is aborted at fifteen seconds and an unlock is n
 test.each([
   { ...entries, filteredCount: 2, totalCount: 2 },
   { data: entries.data },
-  { ...entries, data: [...entries.data, ...entries.data], totalCount: 2, filteredCount: 2 },
-])('discovery rejects partial, uncounted or duplicate entry results (%#)', async (body) => {
+  { ...entries, data: [...entries.data, { ...entries.data[0], name: 'COE conflicting name' }], totalCount: 2, filteredCount: 2 },
+])('discovery rejects partial, uncounted or conflicting entry results (%#)', async (body) => {
   await expect(createOpenpath(fixture(json(body)).transport).listUserEntries(context))
     .rejects.toMatchObject({ code: 'invalid-response' });
+});
+
+test('identical repeated API entry records are deduplicated by ID', async () => {
+  const http = fixture(json({ data: [...entries.data, ...entries.data], totalCount: 2, filteredCount: 2 }));
+  await expect(createOpenpath(http.transport).listUserEntries(context)).resolves.toEqual([
+    { id: 90, name: 'COE Door', zone: 'COE', site: 'Main building' },
+  ]);
 });
 
 test('the real session service persists only association hints and restores through the HTTP adapter', async () => {
