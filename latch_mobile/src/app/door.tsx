@@ -7,6 +7,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { AccessScreen } from '@/components/access-screen';
 import { ActionButton } from '@/components/action-button';
 import { InlineMessage } from '@/components/inline-message';
+import { DoorEmptyState } from '@/components/door-empty-state';
 import { ThemedText } from '@/components/themed-text';
 import type { DoorChoice, OrganisationChoice } from '@/services/latch';
 import { useLatch } from '@/services/latch-context';
@@ -21,6 +22,7 @@ type DoorState =
   | { status: 'organisations'; choices: OrganisationChoice[] }
   | { status: 'doors'; choices: DoorChoice[] }
   | { status: 'ready'; door: DoorChoice; choices: DoorChoice[] }
+  | { status: 'empty'; noEntries: boolean }
   | { status: 'unavailable'; message: string };
 
 function DoorIdentity({ door }: { door: DoorChoice }) {
@@ -83,6 +85,10 @@ export default function DoorScreen() {
       if (!active) return;
       const failure = safeAccessError(error);
       if (['expired', 'stale-operation'].includes(failure.code)) return;
+      if (failure.code === 'entries-empty' || failure.code === 'entry-not-found') {
+        setState({ status: 'empty', noEntries: failure.code === 'entries-empty' });
+        return;
+      }
       setState({ status: 'unavailable', message: failure.message });
       toast.error('COE access unavailable', { description: failure.message });
     }
@@ -180,6 +186,7 @@ export default function DoorScreen() {
           <InlineMessage>COE Door access is unavailable. {state.message}</InlineMessage>
         </View>
       ) : null}
+      {state.status === 'empty' ? <DoorEmptyState noEntries={state.noEntries} /> : null}
       {state.status === 'organisations' ? <>
         <ThemedText type="subtitle" accessibilityRole="header">Choose an organisation</ThemedText>
         {state.choices.map((choice) => <ActionButton key={choice.key} label={choice.name} secondary

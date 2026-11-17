@@ -90,7 +90,7 @@ During submission, show **Signing in…**, disable repeat submission, and retain
 
 Use the organisation/user associations returned by login. A single unambiguous association proceeds automatically; several require a readable **Choose organisation** step. Show provider organisation names, not numeric-ID input. Signing in does not establish COE permission.
 
-Read this user's permitted entries and find an exact, trimmed, case-insensitive **COE Door** name match. One result proceeds; several require selection by verified site/zone context. If those labels cannot distinguish the candidates, stop and ask the user to contact IFSS. No fuzzy match or first-result fallback is allowed. A denied read, incomplete list and a completed search with no match are different states. No match can offer **Change organisation** where applicable. Resolve an existing valid Cloud Key for the same user; ambiguity must not silently select another credential.
+Read this user's permitted entries and match the standalone word **COE** anywhere in the name, case-insensitively. One result proceeds; several require selection by verified site/zone context. If those labels cannot distinguish the candidates, stop and ask the user to contact IFSS. No fuzzy match or first-result fallback is allowed. Show separate neutral states for **No doors returned** and **No COE doors found**, with pull-down refresh. A denied read, invalid response or network failure remains an error. Resolve an existing valid Cloud Key for the same user; ambiguity must not silently select another credential.
 
 ### C. COE Door
 

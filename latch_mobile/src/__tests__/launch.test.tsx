@@ -526,7 +526,7 @@ test('refresh recovers from denied discovery without automatically requesting an
   await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
   await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent(/Door access is unavailable for this account\./);
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Alta denied this access request\./);
   denied = false;
 
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
@@ -714,19 +714,43 @@ test('native interruption and restart restore the employee’s unknown result wi
   expect(journal).not.toContain('latch-demo-only');
 });
 
-test('unavailable door access shows an error toast while unlock remains unavailable', async () => {
-  const provider = createMockOpenpath({ entries: [] });
+test.each([
+  [[], 'No doors returned', 'Alta returned no doors for this account'],
+  [[{ id: 900, name: 'Reception', site: 'Main', zone: 'Lobby' }], 'No COE doors found', 'Your available doors do not include a COE match'],
+])('successful discovery without a matching door shows a neutral empty state: %s', async (entries, title, message) => {
+  const provider = createMockOpenpath({ entries: entries as Entry[] });
   const Layout = () => <RootLayout provider={provider} />;
   await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
   await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
   await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
 
-  await fireEvent.press(await screen.findByRole('button', { name: /COE access unavailable/ }));
-
-  expect(screen.getByRole('alert')).toHaveTextContent(/COE Door access is unavailable\./);
+  expect(await screen.findByRole('header', { name: title as string })).toBeOnTheScreen();
+  expect(screen.getByText(new RegExp(message as string))).toBeOnTheScreen();
+  expect(screen.queryByRole('alert')).not.toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: /COE access unavailable/ })).not.toBeOnTheScreen();
   expect(screen.queryByRole('button', { name: /unlock/i })).not.toBeOnTheScreen();
   expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('pulling down from an empty state can recover a COE door without sending an unlock', async () => {
+  const base = createMockOpenpath();
+  let empty = true;
+  const provider = { ...base, async listUserEntries(context: Parameters<typeof base.listUserEntries>[0]) {
+    return empty ? [] : base.listUserEntries(context);
+  } };
+  const Layout = () => <RootLayout provider={provider} />;
+  await renderRouter({ _layout: Layout, index: HomeScreen, door: DoorScreen });
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'demo@latch.example');
+  await fireEvent.changeText(screen.getByLabelText('Password'), 'latch-demo-only');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByRole('header', { name: 'No doors returned' })).toBeOnTheScreen();
+  expect(screen.getByText(/pull down to check again/i)).toBeOnTheScreen();
+  empty = false;
+  await fireEvent(screen.getByLabelText('Refresh door access'), 'refresh');
+  expect(await screen.findByRole('button', { name: 'Unlock COE Door' })).toBeOnTheScreen();
+  expect(screen.queryByRole('header', { name: 'No doors returned' })).not.toBeOnTheScreen();
+  expect(base.getUnlockRequests()).toEqual([]);
 });
 
 test('the employee can complete demo MFA after correcting an invalid authenticator code', async () => {
