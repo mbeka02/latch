@@ -1,6 +1,6 @@
 export type AccessErrorCode =
   | 'invalid-credentials' | 'mfa-required' | 'mfa-invalid' | 'unsupported-auth'
-  | 'unavailable' | 'invalid-response' | 'expired' | 'storage' | 'stale-operation' | 'access-denied' | 'entry-not-found'
+  | 'unavailable' | 'invalid-response' | 'expired' | 'storage' | 'stale-operation' | 'access-denied' | 'entries-empty' | 'entry-not-found'
   | 'organisation-required' | 'organisation-unavailable' | 'ambiguous-entry' | 'credential-unavailable' | 'access-changed'
   | 'acknowledgement-required' | 'unlock-pending' | 'cooldown' | 'attempt-storage' | 'request-not-sent';
 
@@ -14,8 +14,9 @@ const messages: Record<AccessErrorCode, string> = {
   expired: 'Your session has expired. Sign in again.',
   storage: 'Secure session storage is unavailable. Try signing in again.',
   'stale-operation': 'This operation belongs to a previous session.',
-  'access-denied': 'Door access is unavailable for this account.',
-  'entry-not-found': 'No COE Door was found in this organisation. Check your access with IFSS.',
+  'access-denied': 'Alta denied this access request. Check your permissions with IFSS.',
+  'entries-empty': 'Alta returned no entries for your account in this organisation. Ask IFSS to confirm your door access.',
+  'entry-not-found': 'Alta returned entries, but none has the word COE in its name. Ask IFSS to confirm the door name and organisation.',
   'organisation-required': 'Choose an organisation before checking door access.',
   'organisation-unavailable': 'Organisation names are missing or ambiguous. Ask IFSS to clarify your memberships.',
   'ambiguous-entry': 'COE Door matches cannot be distinguished by site and zone. Ask IFSS to clarify the entries.',

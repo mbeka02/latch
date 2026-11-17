@@ -1,6 +1,7 @@
 import type { Credential, Entry, Openpath, ProviderSession, SignInInput, UserContext, UserSession } from '@/lib/openpath';
 import { AccessError, safeAccessError, type AccessErrorCode } from '@/lib/access-error';
 import type { SessionStorage } from '@/lib/session-storage';
+import { isCoeEntryName } from '@/lib/entry-discovery';
 
 const SESSION_CAP_MS = 15 * 60 * 1000;
 
@@ -456,8 +457,9 @@ export function createLatch(provider: Openpath, { now = Date.now, storage, attem
         assertCurrent(operation);
         currentSession();
         if (revision !== discovery) throw new AccessError('access-changed');
-        const matches = entries.filter((entry) => entry.name.trim().toLowerCase() === 'coe door');
+        const matches = entries.filter((entry) => isCoeEntryName(entry.name));
         const keys = usableKeys(credentials);
+        if (!entries.length) throw new AccessError('entries-empty');
         if (!matches.length) throw new AccessError('entry-not-found');
         const contexts = matches.map((entry) => JSON.stringify([entry.site.trim().toLowerCase(), entry.zone.trim().toLowerCase()]));
         if (new Set(contexts).size !== matches.length) throw new AccessError('ambiguous-entry');

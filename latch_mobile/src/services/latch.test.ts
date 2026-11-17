@@ -344,29 +344,37 @@ test('an explicit unlock uses the discovered entry and the employee\'s existing 
   ]);
 });
 
-test('the employee discovers COE from their provider data and existing Cloud Key', async () => {
+test.each(['COE', 'coe entrance', 'COE Door Intercom', 'Main entrance (CoE)'])('the employee discovers the standalone COE word in %s', async (name) => {
   const { auth, doors } = createTestLatch(createMockOpenpath({
-    entries: [{ id: 9876, name: 'COE Door', site: 'Assessment site', zone: 'Engineering' }],
+    entries: [{ id: 9876, name, site: 'Assessment site', zone: 'Engineering' }],
     credentials: [{ id: 8765, kind: 'cloud-key', validFrom: null, validUntil: null }],
   }));
   await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
 
   expect(await doors.discoverDoors()).toEqual([{
     key: expect.any(String),
-    name: 'COE Door',
+    name,
     organisation: 'IFSS demo',
     site: 'Assessment site',
     zone: 'Engineering',
   }]);
 });
 
-test('an unrelated entry never becomes a COE choice or an unlock target', async () => {
-  const provider = createMockOpenpath({ entries: [{ id: 999, name: 'Reception', site: 'Demo', zone: 'Lobby' }] });
+test.each(['Reception', 'COEX entrance', 'XCOE door'])('the unrelated entry %s never becomes a COE choice or unlock target', async (name) => {
+  const provider = createMockOpenpath({ entries: [{ id: 999, name, site: 'Demo', zone: 'Lobby' }] });
   const { auth, doors } = createTestLatch(provider);
   await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
 
   await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'entry-not-found' });
   await expect(doors.requestUnlock('choice-1')).rejects.toThrow();
+  expect(provider.getUnlockRequests()).toEqual([]);
+});
+
+test('zero returned entries are distinct from returned entries with no COE match', async () => {
+  const provider = createMockOpenpath({ entries: [] });
+  const { auth, doors } = createTestLatch(provider);
+  await auth.signIn({ email: 'demo@latch.example', password: 'latch-demo-only' });
+  await expect(doors.discoverDoors()).rejects.toMatchObject({ code: 'entries-empty' });
   expect(provider.getUnlockRequests()).toEqual([]);
 });
 
@@ -407,6 +415,7 @@ test('distinct COE matches require an explicit choice with their original site a
   expect(choices.map(({ name, site, zone }) => ({ name, site, zone }))).toEqual([
     { name: ' coe DOOR ', site: 'North building', zone: 'Lab' },
     { name: 'COE Door', site: 'South building', zone: 'Lab' },
+    { name: 'COE Door annex', site: 'East building', zone: 'Lab' },
   ]);
   expect(provider.getUnlockRequests()).toEqual([]);
   await doors.requestUnlock(choices[1].key);
