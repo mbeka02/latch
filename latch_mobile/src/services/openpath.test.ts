@@ -157,6 +157,24 @@ test('entry discovery uses the logged-in association and preserves the numeric I
   expect(http.requests).toEqual([{ method: 'GET', path: '/orgs/31/users/42/entries', token: 'fixture-jwt' }]);
 });
 
+test.each([
+  [[], 'empty', 0],
+  [[{ ...entries.data[0], name: 'Reception' }], 'no-match', 0],
+  [[{ ...entries.data[0], name: 'COE Intercom' }], 'matched', 1],
+])('outbound discovery logs describe returned entries without account or credential data: %s', async (rows, result, matches) => {
+  jest.mocked(Sentry.logger.info).mockClear();
+  const http = fixture(json({ data: rows, totalCount: rows.length }));
+  await createOpenpath(http.transport).listUserEntries(context);
+  const call = jest.mocked(Sentry.logger.info).mock.calls.find(([message]) => message === 'Latch entry discovery');
+  expect(call).toBeDefined();
+  const [message, attributes] = call!;
+  const outbound = monitoringOptions({ development: false, mode: 'live' }).beforeSendLog!({ level: 'info', message: String(message), attributes });
+  expect(outbound?.attributes).toMatchObject({ 'latch.operation': 'entries', 'latch.result': result,
+    'latch.entry_count': rows.length, 'latch.coe_match_count': matches, 'latch.entries_omitted': 0,
+    'latch.entry_sample': JSON.stringify(rows.map(({ id, name }) => ({ id, name }))) });
+  expect(JSON.stringify(outbound)).not.toMatch(/fixture-jwt|employee@example.com|Main building|userId|orgId/);
+});
+
 test('a short credential page keeps paginating until an empty page and uses outer Cloud Key IDs', async () => {
   const http = fixture(json({ data: [
     { id: 71, cloudKey: { id: 701 }, startDate: '2026-11-01T00:00:00Z', endDate: null },

@@ -9,10 +9,38 @@ function errorMessage(value?: string) {
   return value && (/^Latch (login|session-check|entries|credentials|unlock) failed: (unavailable|invalid-response|storage|attempt-storage|request-not-sent)$/.test(value) ||
     /^Latch Sentry verification \d{13}$/.test(value)) ? value : 'Application error (message omitted)';
 }
+
+// Door IDs/names are explicitly permitted diagnostic metadata. Never export
+// full API objects, site/employee context, URLs or credential-looking names.
+export function entrySample(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const sample: { id: number; name: string }[] = [];
+  for (const item of value.slice(0, 20)) {
+    if (!item || typeof item !== 'object' || !Number.isSafeInteger(item.id) || item.id <= 0 || typeof item.name !== 'string') continue;
+    const name = /@|https?:\/\/|\beyJ[\w-]*\.[\w-]+\.[\w-]+|(?:token|password|secret|authorization)\s*[:=]/i.test(item.name)
+      ? '<name omitted>' : item.name.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 120);
+    sample.push({ id: item.id, name });
+  }
+  return JSON.stringify(sample);
+}
+
 function attributes(value: Record<string, unknown> = {}) {
   const safe: Record<string, string | number> = {};
   if (operations.includes(value['latch.operation'] as MonitoredOperation)) safe['latch.operation'] = value['latch.operation'] as string;
-  if (typeof value['latch.result'] === 'string' && ['started', 'accepted', 'denied', 'unknown', 'not-sent', 'failed'].includes(value['latch.result'])) safe['latch.result'] = value['latch.result'];
+  if (typeof value['latch.result'] === 'string' && ['started', 'accepted', 'denied', 'unknown', 'not-sent', 'failed', 'empty', 'no-match', 'matched'].includes(value['latch.result'])) safe['latch.result'] = value['latch.result'];
+  if (value['latch.operation'] === 'entries') {
+    for (const key of ['latch.entry_count', 'latch.coe_match_count', 'latch.entries_omitted']) {
+      const count = value[key];
+      if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) safe[key] = count;
+    }
+    const sample = value['latch.entry_sample'];
+    if (typeof sample === 'string' && sample.length <= 10_000) {
+      try {
+        const projected = entrySample(JSON.parse(sample));
+        if (projected !== undefined) safe['latch.entry_sample'] = projected;
+      } catch { /* Malformed diagnostic samples are omitted. */ }
+    }
+  }
   if (typeof value['latch.duration_ms'] === 'number' && Number.isFinite(value['latch.duration_ms']) && value['latch.duration_ms'] >= 0)
     safe['latch.duration_ms'] = value['latch.duration_ms'];
   if (typeof value['latch.stage'] === 'string' && ['transport', 'timeout', 'response-status', 'response-validation'].includes(value['latch.stage']))
@@ -66,7 +94,7 @@ export function monitoringOptions({ dsn, development, mode }: Configuration): Re
       };
     },
     beforeSendLog(log) {
-      if (!['Latch operation started', 'Latch operation completed', 'Latch operation failed', 'Latch unlock outcome'].includes(log.message)) return null;
+      if (!['Latch operation started', 'Latch operation completed', 'Latch operation failed', 'Latch unlock outcome', 'Latch entry discovery'].includes(log.message)) return null;
       const safe = attributes(log.attributes);
       safe['sentry.environment'] = `${development ? 'development' : 'production'}-${mode}`;
       const release = log.attributes?.['sentry.release'];

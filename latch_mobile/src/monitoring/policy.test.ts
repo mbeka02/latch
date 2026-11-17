@@ -73,3 +73,21 @@ test('span export removes free-form data before the SDK serializes it', () => {
     data: { password: 'fixture-password', 'http.url': 'https://example.com?totp=654321' } });
   expect(JSON.stringify(span)).not.toMatch(/fixture|654321|users\/17/);
 });
+
+test('entry samples are bounded and projected again at export, with credential-looking names removed', () => {
+  const options = monitoringOptions({ development: false, mode: 'live' });
+  const entries = Array.from({ length: 25 }, (_, index) => ({ id: index + 1,
+    name: index === 0 ? 'password=fixture-secret' : index === 1 ? 'employee@example.com' : 'COE ' + 'x'.repeat(200),
+    token: 'fixture-token', zone: 'private-site' }));
+  const outbound = options.beforeSendLog!({ level: 'info', message: 'Latch entry discovery', attributes: {
+    'latch.operation': 'entries', 'latch.result': 'matched', 'latch.entry_count': 25,
+    'latch.coe_match_count': 23, 'latch.entries_omitted': 5, 'latch.entry_sample': JSON.stringify(entries),
+    token: 'fixture-token', email: 'employee@example.com',
+  } });
+  const sample = JSON.parse(outbound!.attributes!['latch.entry_sample'] as string);
+  expect(sample).toHaveLength(20);
+  expect(sample[0]).toEqual({ id: 1, name: '<name omitted>' });
+  expect(sample[1]).toEqual({ id: 2, name: '<name omitted>' });
+  expect(sample[2].name).toHaveLength(120);
+  expect(JSON.stringify(outbound)).not.toMatch(/fixture|employee@example|private-site/);
+});

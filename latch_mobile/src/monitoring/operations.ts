@@ -1,10 +1,24 @@
 import * as Sentry from '@sentry/react-native';
 import { safeAccessError } from '@/lib/access-error';
-import type { MonitoredOperation } from '@/monitoring/policy';
+import { entrySample, type MonitoredOperation } from '@/monitoring/policy';
 import type { UnlockSnapshot } from '@/services/latch';
+import type { Entry } from '@/lib/openpath';
+import { isCoeEntryName } from '@/lib/entry-discovery';
 
 function telemetry<T>(action: () => T): T | undefined {
   try { return action(); } catch { /* Monitoring must never decide a door operation's outcome. */ }
+}
+
+export function reportEntryDiscovery(entries: Entry[]) {
+  telemetry(() => {
+    const matches = entries.filter((entry) => isCoeEntryName(entry.name)).length;
+    Sentry.logger.info('Latch entry discovery', {
+      'latch.operation': 'entries', 'latch.result': !entries.length ? 'empty' : matches ? 'matched' : 'no-match',
+      'latch.entry_count': entries.length, 'latch.coe_match_count': matches,
+      'latch.entries_omitted': Math.max(0, entries.length - 20),
+      'latch.entry_sample': entrySample(entries),
+    });
+  });
 }
 
 export function reportUnlockOutcome(status: UnlockSnapshot['status']) {
