@@ -181,12 +181,15 @@ def describe_entries(response):
             'note': 'No matching name does not establish whether account permissions, door naming or configuration caused the result.'}
 
 
-def probe(host, email, password, code, namespace, report, secrets, include_entries=False):
+def probe(host, email, password, code, namespace, report, secrets, include_entries=False, inspect_access=None,
+          for_mobile_login=None):
     body = {'email': email.strip(), 'password': password}
     if namespace:
         body['namespaceNickname'] = namespace
     if code:
         body['mfa'] = {'totpCode': code}
+    if for_mobile_login is not None:
+        body['forMobileLogin'] = for_mobile_login
     record, login = request(host, 'POST', '/auth/login', body=body)
     report['requests'].append(record)
     if record['status'] != 201 or not isinstance(login, dict) or not isinstance(login.get('data'), dict):
@@ -237,6 +240,8 @@ def probe(host, email, password, code, namespace, report, secrets, include_entri
         if not validation['passed']:
             report['result'] = 'HTTP 200 profile rejected by current Latch validation: ' + validation['failedAt']
             return 1
+    if inspect_access is not None:
+        return inspect_access(host, token.strip(), list(dict.fromkeys(associations)), report)
     if include_entries:
         total_matches = 0
         for org_id, user_id in dict.fromkeys(associations):
